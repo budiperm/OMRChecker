@@ -12,9 +12,13 @@ echo Menggunakan: %PY%
 call .venv-build\Scripts\activate.bat
 python -m pip install --upgrade pip || goto :error
 python -m pip install -r requirements.gui.txt || goto :error
+REM Optional: vendor\TWAINDSM.dll (64-bit TWAIN DSM) is bundled when present
+set "TWAINDSM="
+if exist vendor\TWAINDSM.dll set "TWAINDSM=--add-binary vendor\TWAINDSM.dll;."
 pyinstaller --noconfirm --clean --onefile --windowed --name OMRChecker ^
   --noupx --paths . --collect-submodules src ^
-  --hidden-import openpyxl ^
+  --hidden-import openpyxl --hidden-import win32com.client --hidden-import pythoncom ^
+  --hidden-import pywintypes %TWAINDSM% ^
   gui.py || goto :error
 xcopy /e /i /y samples dist\samples >nul
 echo.

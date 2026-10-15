@@ -23,7 +23,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK siswa", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 SCAN_TYPES = (".jpg", ".jpeg", ".png", ".pdf")
@@ -548,7 +548,8 @@ def spaced(key, group=5):
 
 class ScansStep(Step):
     title = "Folder LJK siswa & daftar siswa"
-    hint = "Pilih folder berisi hasil scan (JPG/PNG/PDF; subfolder ikut dibaca). Daftar siswa opsional."
+    hint = ("Pilih folder berisi hasil scan (JPG/PNG/PDF; subfolder ikut dibaca), atau scan langsung dari scanner. "
+            "Daftar siswa opsional.")  # fmt: skip
 
     def __init__(self, wizard):
         super().__init__(wizard)
@@ -559,6 +560,7 @@ class ScansStep(Step):
         self.folder = tk.StringVar()
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
+        ttk.Button(row, text="Scan dari scanner...", command=self.scan_paper).pack(side="left")
         self.count = tk.StringVar()
         ttk.Label(f, textvariable=self.count).pack(anchor="w", padx=6)
         self.files = tk.Listbox(f, height=8)
@@ -598,6 +600,24 @@ class ScansStep(Step):
         d = filedialog.askdirectory(parent=self, title="Folder hasil scan LJK siswa", initialdir=self.folder.get() or None)
         if d:
             self.folder.set(d)
+
+    def scan_paper(self):
+        import scan_dialog
+
+        folder = self.folder.get().strip()
+        if not folder:
+            folder = filedialog.askdirectory(parent=self, title="Folder untuk menyimpan hasil scan LJK", mustexist=False)
+            if not folder:
+                return
+        try:
+            Path(folder).mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            messagebox.showerror(APP_TITLE, f"Folder tidak bisa dibuat:\n{e}", parent=self)
+            return
+        self.folder.set(str(Path(folder)))
+        dialog = scan_dialog.ScanDialog(self, self.folder.get(), on_page=lambda path: self.scan())
+        self.wait_window(dialog)
+        self.scan()
 
     def scan(self):
         files = scan_files(self.folder.get())

@@ -885,6 +885,10 @@ def main():
             return run_batch(sys.argv[2], sys.argv[3])
         if len(sys.argv) == 6 and sys.argv[1] == "--process" and sys.argv[4] == "--template":
             return run_batch(sys.argv[2], sys.argv[3], sys.argv[5])
+        if "--cek-scanner" in sys.argv:  # OMRChecker-debug.exe --cek-scanner
+            import scanner
+
+            return scanner.main()
         if "--lanjutan" in sys.argv:
             run_gui()  # advanced mode: the original single window
         else:

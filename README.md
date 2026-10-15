@@ -6,6 +6,7 @@ Fork dari [Udayraj123/OMRChecker](https://github.com/Udayraj123/OMRChecker) deng
 
 ### Fitur
 - Wizard 6 langkah: pilih template → kunci jawaban → folder scan → folder hasil → proses → rekap.
+- Scan langsung dari scanner (TWAIN atau WIA) ke folder LJK: semua lembar di ADF sekaligus, 200/300 dpi, abu-abu/warna, A4/F4.
 - Pembuat template dari LJK kosong (PDF/scan): bulatan, kolom identitas, dan bagian soal dideteksi otomatis; bisa diedit manual.
 - Kunci jawaban per kode naskah dan per bagian, bobot nilai per soal (mis. `1-10=2, 11-20=1`).
 - Koreksi manual hasil baca, daftar siswa dari Excel, analisis butir soal.
