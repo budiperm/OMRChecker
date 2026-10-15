@@ -1,3 +1,32 @@
+# OMRChecker – Pemindai LJK (fork)
+
+Fork dari [Udayraj123/OMRChecker](https://github.com/Udayraj123/OMRChecker) dengan aplikasi Windows berbahasa Indonesia untuk memindai dan menilai LJK (Lembar Jawaban Komputer).
+
+**Unduh:** lihat [Releases](../../releases) → `OMRChecker-windows.zip`.
+
+### Fitur
+- Wizard 6 langkah: pilih template → kunci jawaban → folder scan → folder hasil → proses → rekap.
+- Pembuat template dari LJK kosong (PDF/scan): bulatan, kolom identitas, dan bagian soal dideteksi otomatis; bisa diedit manual.
+- Kunci jawaban per kode naskah dan per bagian, bobot nilai per soal (mis. `1-10=2, 11-20=1`).
+- Koreksi manual hasil baca, daftar siswa dari Excel, analisis butir soal.
+- Ekspor rekap nilai ke Excel.
+- Penyelarasan dengan kotak hitam di sudut LJK; lembar terbalik diputar otomatis, lembar terpotong ditandai.
+- Mode lanjutan (`OMRChecker.exe --lanjutan`) dan mode batch (`--process <folder scan> <folder hasil> [--template <folder template>]`).
+
+### Persyaratan sistem (Windows)
+- Windows 10 / 11 64-bit, RAM 4 GB (disarankan 8 GB), ruang disk 500 MB, layar minimal 1366×768.
+- Tidak perlu memasang Python. Untuk membuka rekap: Excel, LibreOffice Calc, atau WPS.
+- Scan 200–300 dpi (JPG/PNG/PDF); keempat kotak sudut LJK harus ikut terscan.
+
+Detail: [PERSYARATAN.txt](PERSYARATAN.txt).
+
+### Pengembangan
+- Menjalankan dari kode: `pip install -r requirements.gui.txt` lalu `python gui.py` (Python 3.10+).
+- Build exe di Windows: `build_windows.bat`; dari Linux (Docker + Wine): `./build_windows_docker.sh`.
+- Test: `pytest tests_gui -o addopts=""`. Beberapa test memakai contoh LJK asli di `tests_gui/data/` yang tidak ikut di repo; test itu otomatis dilewati.
+
+---
+
 # OMR Checker
 
 Read OMR sheets fast and accurately using a scanner 🖨 or your phone 🤳.

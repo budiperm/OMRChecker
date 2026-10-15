@@ -42,7 +42,8 @@ class FeatureBasedAlignment(ImagePreprocessor):
         return self.ref_path.name
 
     def exclude_files(self):
-        return [self.ref_path]
+        extra = [self.relative_dir.joinpath(n) for n in self.options.get("excludeFiles", [])]
+        return [self.ref_path] + extra
 
     def apply_filter(self, image, _file_path):
         config = self.tuning_config

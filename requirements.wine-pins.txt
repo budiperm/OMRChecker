@@ -1,0 +1,7 @@
+# Version pins used only by build_windows_docker.sh: newer numpy/PyInstaller
+# releases call functions that Wine does not implement yet.
+numpy==1.26.4
+pandas==2.2.3
+opencv-python==4.10.0.84
+matplotlib==3.9.4
+pyinstaller==6.11.1

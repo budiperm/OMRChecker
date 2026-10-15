@@ -1,0 +1,39 @@
+OMRChecker - Pemindai LJK
+=========================
+
+PERSYARATAN SISTEM (WINDOWS)
+----------------------------
+- Windows 10 atau Windows 11, 64-bit.
+  (Windows 7/8 dan Windows 32-bit tidak didukung.)
+- RAM minimal 4 GB (disarankan 8 GB untuk ratusan LJK sekaligus).
+- Ruang disk kosong minimal 500 MB (program ~120 MB, ditambah folder
+  hasil scan dan hasil proses).
+- Layar minimal 1366 x 768.
+- TIDAK perlu memasang Python atau program lain: cukup OMRChecker.exe.
+- Untuk membuka rekap nilai (.xlsx): Microsoft Excel, LibreOffice Calc,
+  atau WPS Office.
+
+SCAN LJK
+--------
+- Scanner flatbed/ADF disarankan. Foto HP (mis. CamScanner) bisa dipakai,
+  tapi kertas harus rata.
+- Resolusi 200-300 dpi, warna atau grayscale.
+- Format file: JPG, PNG, atau PDF (PDF boleh banyak halaman).
+- Keempat kotak hitam di sudut LJK harus ikut terscan (jangan terpotong).
+  Lembar yang terbalik (atas-bawah) diputar otomatis.
+
+MENJALANKAN
+-----------
+1. Ekstrak OMRChecker-windows.zip ke folder mana saja (mis. Dokumen).
+2. Klik dua kali OMRChecker.exe.
+   Saat pertama dijalankan, Windows SmartScreen mungkin menampilkan
+   "Windows protected your PC" karena program belum bertanda tangan
+   digital: klik "More info" lalu "Run anyway".
+   Pembukaan pertama bisa memakan waktu 10-20 detik.
+3. Ikuti 6 langkah di jendela wizard.
+
+Template disimpan di %APPDATA%\OMRChecker\templates.
+Bila program menutup sendiri, lihat %APPDATA%\OMRChecker\crash.log,
+atau jalankan OMRChecker-debug.exe (unduh terpisah dari halaman rilis)
+dari Command Prompt untuk melihat
+pesan kesalahannya.

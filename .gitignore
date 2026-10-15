@@ -12,3 +12,10 @@ outputs/*
 **/__pycache__
 venv/
 OMRChecker.wiki/
+
+# Pemindai LJK (Windows GUI)
+build/
+dist/
+*.spec
+tests_gui/data/*.json
+tests_gui/data/*.pdf

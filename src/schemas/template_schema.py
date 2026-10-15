@@ -70,6 +70,7 @@ TEMPLATE_SCHEMA = {
                     "name": {
                         "type": "string",
                         "enum": [
+                            "AlignOnMarkers",
                             "CropOnMarkers",
                             "CropPage",
                             "FeatureBasedAlignment",
@@ -81,6 +82,29 @@ TEMPLATE_SCHEMA = {
                 },
                 "required": ["name", "options"],
                 "allOf": [
+                    {
+                        "if": {"properties": {"name": {"const": "AlignOnMarkers"}}},
+                        "then": {
+                            "properties": {
+                                "options": {
+                                    "type": "object",
+                                    "additionalProperties": False,
+                                    "properties": {
+                                        "markerCenters": {
+                                            "type": "array",
+                                            "items": two_positive_numbers,
+                                            "minItems": 4,
+                                            "maxItems": 4,
+                                        },
+                                        "markerSize": {"type": "number"},
+                                        "excludeFiles": ARRAY_OF_STRINGS,
+                                        "orientationReference": {"type": "string"},
+                                    },
+                                    "required": ["markerCenters"],
+                                }
+                            }
+                        },
+                    },
                     {
                         "if": {"properties": {"name": {"const": "CropOnMarkers"}}},
                         "then": {
@@ -113,6 +137,7 @@ TEMPLATE_SCHEMA = {
                                     "additionalProperties": False,
                                     "properties": {
                                         "2d": {"type": "boolean"},
+                                        "excludeFiles": ARRAY_OF_STRINGS,
                                         "goodMatchPercent": {"type": "number"},
                                         "maxFeatures": {"type": "integer"},
                                         "reference": {"type": "string"},
