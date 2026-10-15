@@ -589,7 +589,10 @@ class Wia:
             import win32com.client
         except ImportError as e:
             raise ScanError("Komponen WIA (pywin32) tidak tersedia.") from e
-        return win32com.client.Dispatch("WIA.DeviceManager")
+        try:
+            return win32com.client.Dispatch("WIA.DeviceManager")
+        except Exception as e:  # wiaaut.dll missing or not registered
+            raise ScanError(f"Layanan WIA Windows tidak tersedia ({e}).") from e
 
     def _com(self, fn):
         import pythoncom
