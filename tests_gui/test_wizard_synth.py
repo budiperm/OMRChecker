@@ -299,3 +299,150 @@ def test_about_shows_license(setup, monkeypatch):
         assert "MIT License" in shown[3] and "Udayraj" in shown[3]  # upstream notice
     finally:
         w.destroy()
+
+
+def test_stopped_run_resumes_without_rereading(setup, monkeypatch):
+    import csv
+
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    asked = []
+    monkeypatch.setattr(wz.ChoiceDialog, "ask", staticmethod(lambda m, h, t, b, detail="": (asked.append(t), "lanjut")[1]))
+    hasil = tmp / "hasil"
+    ujian.Exam(scans_dir=str(scans), output_dir=str(hasil)).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        step = run_to_results(w)
+        assert step.done_count == 3 and step.progress["value"] == 3  # progress from the worker, not the log
+        # as if the run had been stopped before siswa_2.jpg was read
+        results_csv = next(hasil.rglob("Results/Results_*.csv"))
+        with open(results_csv, newline="", encoding="utf-8") as fh:
+            rows = list(csv.reader(fh))
+        with open(results_csv, "w", newline="", encoding="utf-8") as fh:
+            csv.writer(fh, quoting=csv.QUOTE_NONNUMERIC).writerows(r for r in rows if r[0] != "siswa_2.jpg")
+        assert len(ujian.done_sheets(hasil)) == 2
+
+        step.run_btn.invoke()
+        assert asked == ["2 dari 3 LJK sudah diperiksa sebelumnya."]
+        deadline = time.time() + 300
+        while step.proc is not None:
+            w.update()
+            time.sleep(0.05)
+            assert time.time() < deadline
+        pump(w, 20)
+        assert "".join(step.log).count("Opening image") == 1  # only the missing sheet was read
+        assert len(step.results) == 3
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+
+
+def test_rekap_order_and_participant_reports(setup, monkeypatch):
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: False)
+    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil")).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        run_to_results(w)
+        w.next()
+        step = w.steps[5]
+        step.order.set(ujian.RANK_ORDERS["nilai"])
+        step.on_order()
+        assert w.exam.rekap_order == "nilai"
+        pdf = tmp / "laporan.pdf"
+        monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(pdf))
+        step.export_reports()
+        import fitz
+
+        with fitz.open(str(pdf)) as doc:
+            assert doc.page_count == 2  # the empty page has no report
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+
+
+def test_template_export_and_import_buttons(setup, monkeypatch):
+    import wizard as wz
+
+    lib, _, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "showinfo", lambda *a, **k: None)
+    packed = tmp / "LJK Sintetis.ljk"
+    monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(packed))
+    monkeypatch.setattr(wz.filedialog, "askopenfilename", lambda **k: str(packed))
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        step = w.steps[0]
+        step.export_file()
+        assert packed.is_file()
+        step.import_file()
+        assert [t.name for t in step.templates] == ["LJK Sintetis", "LJK Sintetis"]
+        assert step.selected().path == lib / "LJK Sintetis (2)"
+    finally:
+        w.destroy()
+
+
+def test_stop_reports_how_far_it_got(setup, monkeypatch):
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)  # no answer key: read only
+    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil")).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        w.next()
+        w.next()
+        w.next()
+        w.next()
+        step = w.steps[4]
+        step.run_btn.invoke()
+        pump(w, 5)
+        step.stop_btn.invoke()
+        pump(w, 5)
+        assert step.proc is None and step.progress_text.get() == "Dihentikan"
+        assert step.summary.get().startswith("Dihentikan:") and "dari 3 LJK" in step.summary.get()
+    finally:
+        w.destroy()
+
+
+def test_full_rerun_keeps_exam_file(setup, monkeypatch):
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.ChoiceDialog, "ask", staticmethod(lambda *a, **k: "ulang"))
+    hasil = tmp / "hasil"
+    ujian.Exam(scans_dir=str(scans), output_dir=str(hasil)).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        step = run_to_results(w)
+        (scans / "baru.jpg").write_bytes((scans / "siswa_1.jpg").read_bytes())  # a 4th scan arrives
+        (hasil / "catatan saya.txt").write_text("jangan dihapus")
+        w.go(4)
+        step.run_btn.invoke()
+        deadline = time.time() + 300
+        while step.proc is not None:
+            w.update()
+            time.sleep(0.05)
+            assert time.time() < deadline
+        pump(w, 20)
+        assert "".join(step.log).count("Opening image") == 4  # everything read again
+        assert (hasil / ujian.EXAM_FILE).is_file() and (hasil / "catatan saya.txt").is_file()
+        assert len(step.results) == 4
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass

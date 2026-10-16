@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "0.6.0"
+VERSION = "1.0.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -246,8 +246,9 @@ def main(shots, out_pdf):
               shot("01_template"),
               numbered(["Daftar template yang sudah ada. Klik salah satu; gambar LJK-nya tampil di kanan.",
                         "<b>+ Buat baru dari LJK kosong</b> untuk desain LJK yang belum punya template. "
-                        "<b>Edit</b> mengubah template terpilih, <b>Impor</b> mengambil template dari versi lama, "
-                        "<b>Hapus</b> menghapusnya.",
+                        "<b>Edit</b> mengubah template terpilih. <b>Ekspor</b> menyimpan template sebagai satu file "
+                        "<i>.ljk</i> untuk dipakai di komputer lain, dan <b>Impor</b> membukanya di sana. "
+                        "<b>Hapus</b> menghapus template.",
                         "Klik <b>Lanjut</b> bila template yang benar sudah dipilih."]),
               PageBreak(),
               p("Membuat template baru dari LJK kosong", "h2"),
@@ -341,7 +342,9 @@ def main(shots, out_pdf):
     story += [p("Saat langkah ini dibuka, pemeriksaan <b>belum berjalan</b>. Program menunggu sampai Anda menekan tombol."),
               shot("07_siap", caption="Tampilan sebelum diproses."),
               numbered(["Klik <b>Proses LJK</b> untuk mulai memeriksa. Kemajuan terlihat di bilah sebelahnya; "
-                        "<b>Stop</b> menghentikan proses.",
+                        "<b>Stop</b> menghentikan proses. Bila dihentikan, klik <b>Proses LJK</b> lagi dan pilih "
+                        "<b>Lanjutkan sisanya</b>: LJK yang sudah diperiksa tidak diulang. Pilihan yang sama muncul "
+                        "bila ada scan baru yang ditambahkan ke folder.",
                         "Keterangan jumlah LJK yang siap diperiksa."]),
               PageBreak(),
               p("Membaca hasil", "h2"),
@@ -382,14 +385,19 @@ def main(shots, out_pdf):
                         "dan yang perlu dicek.",
                         "<b>Analisis butir soal</b>: persentase benar tiap soal dan sebaran jawaban A–E. Kategori: "
                         "<b>Mudah</b> (lebih dari 70% benar), <b>Sedang</b> (30–70%), <b>Sukar</b> (kurang dari 30%).",
-                        "<b>Ekspor ke Excel...</b> menyimpan rekap lengkap. <b>Buka folder hasil</b> membuka folder "
+                        "<b>Ekspor ke Excel...</b> menyimpan rekap lengkap, termasuk kolom <b>Peringkat</b>. "
+                        "<b>Laporan per peserta (PDF)...</b> membuat satu halaman hasil untuk setiap peserta (identitas, "
+                        "nilai, peringkat, dan jawaban dibandingkan dengan kunci) yang siap dicetak atau dibagikan. "
+                        "<b>Urutan rekap &amp; laporan</b> mengatur urutan baris: nilai tertinggi dulu, kelompok lalu "
+                        "nama, atau nama file. <b>Buka folder hasil</b> membuka folder "
                         "berisi gambar LJK bertanda. Di sebelahnya tertulis status ekspor: <i>Belum diekspor</i>, "
                         "<i>Sudah diekspor</i>, atau <i>Ada perubahan sejak ekspor terakhir</i> (mis. setelah koreksi).",
                         "<b>Ujian baru (template sama)</b>: mulai ujian berikutnya. Kunci, folder, dan koreksi "
                         "dikosongkan; template tetap."]),
               p("Isi file Excel", "h2"),
               table([["Sheet", "Isi"],
-                     ["Rekap Nilai", "Nama, No. Peserta, kelompok, jumlah benar/salah/kosong dan nilai per bagian, nilai akhir"],
+                     ["Rekap Nilai", "Nama, No. Peserta, kelompok, jumlah benar/salah/kosong dan nilai per bagian, "
+                                     "nilai akhir, peringkat"],
                      ["Jawaban", "Jawaban setiap peserta untuk setiap soal"],
                      ["Analisis Butir", "Tingkat kesukaran dan sebaran jawaban tiap soal"],
                      ["Tidak Ikut Ujian", "Peserta di daftar peserta yang tidak punya LJK (bila daftar peserta dipakai)"]],
@@ -407,6 +415,14 @@ def main(shots, out_pdf):
               p("Bila rekap sudah diekspor, tombol <b>Selesai</b> membuka layar <b>Pemeriksaan selesai</b> dengan "
                 "pilihan <b>Buka rekap Excel</b>, <b>Buka folder hasil</b>, <b>Ujian baru</b>, atau "
                 "<b>Tutup aplikasi</b>. Semua pengaturan (template, kunci, folder) tersimpan otomatis."),
+              p("Membuka ujian lama", "h2"),
+              p("Setiap ujian menyimpan pengaturannya (kunci, bobot, koreksi, daftar peserta) di folder hasilnya, "
+                "dalam file <i>ujian.json</i>. Untuk membuka lagi ujian yang sudah lewat, misalnya untuk ekspor "
+                "ulang atau koreksi susulan, klik <b>Buka ujian lama...</b> di kiri bawah lalu pilih folder hasil "
+                "ujian itu. Program langsung membuka langkah Rekap."),
+              p("Bantuan", "h2"),
+              p("Tombol <b>Bantuan</b> di kiri bawah berisi panduan ini, folder data &amp; log, tautan ke halaman "
+                "unduhan versi terbaru, dan <b>Tentang</b> (versi dan lisensi)."),
               PageBreak()]
 
     # ---- troubleshooting
@@ -435,7 +451,7 @@ def main(shots, out_pdf):
                       "Jumlah huruf kunci melebihi jumlah soal bagian itu. Mungkin kunci untuk bagian lain."]],
                     [52 * mm, W - 52 * mm]),  # fmt: skip
               Spacer(1, 10),
-              note("Untuk pengguna mahir tersedia <b>Mode lanjutan</b> (tombol di kiri bawah) dan mode batch: "
+              note("Untuk pengguna mahir tersedia <b>Mode lanjutan</b> (<font name='Courier'>OMRChecker.exe --lanjutan</font>) dan mode batch: "
                    "<font name='Courier'>OMRChecker.exe --process &lt;folder scan&gt; &lt;folder hasil&gt;</font>.")]
 
     def decorate(canvas, doc):

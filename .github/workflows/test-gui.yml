@@ -1,0 +1,37 @@
+name: Test aplikasi
+
+# Test aplikasi Pemindai LJK (tests_gui) di Linux dengan layar virtual (Xvfb).
+# Test yang butuh contoh LJK pribadi (tests_gui/data/) otomatis dilewati.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  test-gui:
+    name: "pytest tests_gui"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Pasang paket sistem
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1 libglib2.0-0 python3-tk
+
+      - name: Pasang dependensi
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.gui.txt pytest syrupy
+
+      - name: Jalankan test
+        run: xvfb-run -a -s "-screen 0 1280x800x24" python -m pytest tests_gui -o addopts="" -q -rs
