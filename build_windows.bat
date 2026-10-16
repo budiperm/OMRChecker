@@ -19,7 +19,7 @@ pyinstaller --noconfirm --clean --onefile --windowed --name OMRChecker ^
   --noupx --paths . --collect-submodules src ^
   --hidden-import openpyxl --hidden-import xlrd --hidden-import win32com.client --hidden-import pythoncom ^
   --hidden-import pywintypes --collect-data sv_ttk --icon assets\icon.ico ^
-  --add-data assets\icon.ico;assets --add-data assets\icon.png;assets --add-data assets\logo.png;assets --add-data LICENSE;. %TWAINDSM% ^
+  --add-data assets\icon.ico;assets --add-data assets\icon.png;assets --add-data assets\logo.png;assets --add-data LICENSE;. --add-data LICENSE-OMRChecker-asli-MIT.txt;. %TWAINDSM% ^
   gui.py || goto :error
 xcopy /e /i /y samples dist\samples >nul
 copy /y PANDUAN.pdf dist\ >nul

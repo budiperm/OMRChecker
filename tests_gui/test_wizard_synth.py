@@ -284,13 +284,18 @@ def test_about_shows_license(setup, monkeypatch):
 
     lib, _, tmp = setup
     shown = []
-    monkeypatch.setattr(wz.ChoiceDialog, "ask", staticmethod(lambda m, h, t, b, detail="": (shown.append(h), "lisensi")[1]))
+    answers = ["lisensi", "pihak"]
+    monkeypatch.setattr(wz.ChoiceDialog, "ask",
+                        staticmethod(lambda m, h, t, b, detail="": (shown.append((h, t)), answers.pop(0))[1]))  # fmt: skip
     monkeypatch.setattr(wz, "show_text", lambda parent, title, text: shown.append(text))
     w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
     try:
         pump(w)
         w.about()
-        assert shown[0] == f"Pemindai LJK v{wz.VERSION}"
-        assert "MIT License" in shown[1] and "Udayraj" in shown[1]
+        heading, text = shown[0]
+        assert heading == f"Pemindai LJK v{wz.VERSION}" and "AGPL-3.0" in text
+        assert shown[1] == (ROOT / "LICENSE").read_text(encoding="utf-8")
+        w.about()
+        assert "MIT License" in shown[3] and "Udayraj" in shown[3]  # upstream notice
     finally:
         w.destroy()

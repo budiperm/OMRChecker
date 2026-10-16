@@ -29,7 +29,9 @@ STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
 RELEASES_URL = PROJECT_URL + "/releases"
-EULA_FILES = ("EULA.txt", "EULA.rtf", "EULA.pdf", "LISENSI.txt")  # next to the exe, put there by the installer
+# (file put next to the exe by the installer, file bundled in the exe as a fallback)
+LICENSE_FILES = ("LISENSI.txt", "LICENSE")  # this program: GNU AGPL-3.0
+NOTICE_FILES = ("PEMBERITAHUAN-PIHAK-KETIGA.txt", "LICENSE-OMRChecker-asli-MIT.txt")  # upstream MIT and others
 SCAN_TYPES = (".jpg", ".jpeg", ".png", ".pdf")
 RED, BLUE = "#ffd7d5", "#dbe9ff"
 
@@ -1198,13 +1200,15 @@ def install_dir():
     return Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 
 
-def license_text():
-    """MIT licence of the upstream OMRChecker (bundled in the exe)."""
+def license_text(files):
+    """Text of the first file found: next to the exe (installer), then bundled
+    in the exe (PyInstaller --add-data), then next to this file (source)."""
+    installed, bundled = files
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    for path in (base / "LICENSE", install_dir() / "LICENSE"):
+    for path in (install_dir() / installed, base / bundled, install_dir() / bundled):
         if path.is_file():
-            return "OMRChecker (https://github.com/Udayraj123/OMRChecker)\n\n" + path.read_text(encoding="utf-8")
-    return f"OMRChecker oleh Udayraj Deshmukh dan kontributor, lisensi MIT.\n{PROJECT_URL}"
+            return path.read_text(encoding="utf-8", errors="replace")
+    return f"Lihat {PROJECT_URL}"
 
 
 def show_text(parent, title, text):
@@ -1459,21 +1463,19 @@ class Wizard(tk.Tk):
         open_file(guide, self)
 
     def about(self):
-        buttons = [("lisensi", "Lisensi pihak ketiga", False), ("tutup", "Tutup", True)]
-        eula = next((install_dir() / n for n in EULA_FILES if (install_dir() / n).is_file()), None)
-        if eula:
-            buttons.insert(0, ("eula", "Perjanjian lisensi (EULA)", False))
         choice = ChoiceDialog.ask(
             self, f"Pemindai LJK v{VERSION}",
-            "Pemeriksa Lembar Jawaban Komputer (LJK) untuk ujian sekolah, seleksi, dan tes perusahaan.",
-            buttons,
+            "Pemeriksa Lembar Jawaban Komputer (LJK) untuk ujian sekolah, seleksi, dan tes perusahaan.\n"
+            "Perangkat lunak bebas dan sumber terbuka, lisensi GNU AGPL-3.0. Hak cipta (c) 2026 Budi Permadi.",
+            [("lisensi", "Lisensi (AGPL-3.0)", False), ("pihak", "Pemberitahuan pihak ketiga", False),
+             ("tutup", "Tutup", True)],
             detail="Dibangun di atas OMRChecker karya Udayraj Deshmukh dan kontributor (lisensi MIT).\n"
-                   f"Situs: {PROJECT_URL}",
+                   f"Kode sumber: {PROJECT_URL}",
         )  # fmt: skip
-        if choice == "eula":
-            open_file(eula, self)
-        elif choice == "lisensi":
-            show_text(self, "Lisensi pihak ketiga", license_text())
+        if choice == "lisensi":
+            show_text(self, "Lisensi", license_text(LICENSE_FILES))
+        elif choice == "pihak":
+            show_text(self, "Pemberitahuan pihak ketiga", license_text(NOTICE_FILES))
 
     def advanced(self):
         import gui
