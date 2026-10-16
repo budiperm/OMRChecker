@@ -36,7 +36,8 @@ pasang dan jangan pakai perangkat lunak ini.
 4. KOMPONEN PIHAK KETIGA DAN SUMBER TERBUKA
    Perangkat Lunak memuat komponen sumber terbuka, termasuk OMRChecker
    (Lisensi MIT, hak cipta Udayraj Deshmukh dan kontributor), Python,
-   OpenCV, NumPy, pandas, Matplotlib, openpyxl, PyMuPDF, dan lainnya.
+   OpenCV, NumPy, pandas, Matplotlib, openpyxl, PyMuPDF, TWAIN Data
+   Source Manager, dan lainnya.
    Daftar lengkap dan teks lisensinya ada di file
    PEMBERITAHUAN-PIHAK-KETIGA.txt di folder instalasi. Setiap komponen
    tersebut tunduk pada lisensinya sendiri. Tidak ada ketentuan dalam

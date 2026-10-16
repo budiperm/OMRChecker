@@ -32,7 +32,7 @@ tidak ditimpa).
 - Scanner tampil dua kali bila punya dua driver: "(TWAIN)" dan "(WIA)".
   Pilih yang TWAIN dulu; bila gagal, coba centang "Tampilkan jendela driver
   scanner", atau pilih versi WIA.
-- TWAIN butuh driver 64-bit (TWAINDSM.dll). Driver yang hanya 32-bit tidak
+- TWAIN butuh driver scanner 64-bit (TWAINDSM.dll sudah disertakan). Driver yang hanya 32-bit tidak
   terbaca; pakai versi WIA-nya atau scan dengan program bawaan scanner.
 - Cek scanner yang terdeteksi: jalankan OMRChecker-debug.exe --cek-scanner
   dari Command Prompt.

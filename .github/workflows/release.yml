@@ -70,6 +70,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.gui.txt
 
+      - name: Ambil TWAIN DSM 64-bit
+        shell: pwsh
+        run: |
+          # TWAIN Data Source Manager 2.4.3 (LGPL-2.1) from twain/twain-dsm tag v2.5.1, so
+          # TWAIN scanners work without installing anything else. Pinned by commit and hash.
+          $base = "https://raw.githubusercontent.com/twain/twain-dsm/3491bec2960e856f8dd4823dc54245b37beed51d"
+          New-Item -ItemType Directory -Force vendor | Out-Null
+          Invoke-WebRequest "$base/Releases/dsm_020403/windows/64/TWAINDSM.dll" -OutFile vendor\TWAINDSM.dll
+          Invoke-WebRequest "$base/TWAIN_DSM/license.txt" -OutFile vendor\TWAINDSM-LICENSE.txt
+          $hash = (Get-FileHash vendor\TWAINDSM.dll -Algorithm SHA256).Hash
+          if ($hash -ne "F01F4ABB051C38DDDA4169F93E0878FD00D57FB3D95F472B497208D08BD0C783") {
+            Write-Error "Hash TWAINDSM.dll tidak cocok: $hash"; exit 1
+          }
+
       - name: Build exe
         shell: pwsh
         run: |
@@ -130,6 +144,8 @@ jobs:
             --ignore-packages pip-licenses prettytable wcwidth pip setuptools wheel --output-file lisensi.txt
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Get-Content lisensi.txt -Encoding utf8 | Add-Content $f -Encoding utf8
+          "`r`n==== TWAIN Data Source Manager 2.4.3 (TWAINDSM.dll) ====`r`nhttps://github.com/twain/twain-dsm`r`n" | Add-Content $f -Encoding utf8
+          Get-Content vendor\TWAINDSM-LICENSE.txt | Add-Content $f -Encoding utf8
           Get-Item $f | Format-Table Name, Length
 
       - name: Build installer (Inno Setup)
@@ -156,7 +172,7 @@ jobs:
           $p = Start-Process $setup -Wait -PassThru `
                  -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"", "/LOG=`"$env:RUNNER_TEMP\setup.log`""
           if ($p.ExitCode) { Get-Content "$env:RUNNER_TEMP\setup.log"; Write-Error "Instalasi gagal ($($p.ExitCode))"; exit 1 }
-          foreach ($f in "OMRChecker.exe", "PANDUAN.pdf", "EULA.txt", "PEMBERITAHUAN-PIHAK-KETIGA.txt", "samples", "unins000.exe") {
+          foreach ($f in "OMRChecker.exe", "PANDUAN.pdf", "EULA.txt", "PEMBERITAHUAN-PIHAK-KETIGA.txt", "samples", "unins000.exe", "_internal\TWAINDSM.dll") {
             if (-not (Test-Path "$dir\$f")) { Write-Error "Tidak terpasang: $f"; exit 1 }
           }
           # Run the installed (windowed) program in batch mode on a bundled sample:
