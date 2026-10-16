@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -38,9 +38,9 @@ CALLOUTS = {  # each marker sits on the top-left corner of what it points at
     "01_template": [(296, 155), (280, 684), (1147, 753)],
     "02_editor": [(10, 8), (700, 84), (692, 466), (1146, 564), (700, 703), (700, 743)],
     "03_kunci": [(280, 108), (496, 198), (656, 255), (280, 676)],
-    "04_folder": [(991, 137), (1073, 137), (285, 205), (293, 617)],
+    "04_folder": [(991, 137), (1073, 137), (296, 181), (285, 232), (293, 617)],
     "05_scan_dialog": [(22, 30), (22, 90), (22, 182), (22, 218), (460, 390)],
-    "06_hasil": [(293, 137), (293, 219)],
+    "06_hasil": [(293, 137), (293, 219), (296, 262)],
     "07_siap": [(279, 108), (264, 716)],
     "08_proses": [(285, 183), (868, 199), (1090, 108), (264, 716)],
     "09_koreksi": [(14, 40), (14, 106), (10, 637), (847, 637)],
@@ -298,6 +298,9 @@ def main(shots, out_pdf):
               shot("04_folder"),
               numbered(["<b>Pilih...</b>: memilih folder berisi file JPG/PNG/PDF. Subfolder ikut dibaca.",
                         "<b>Scan dari scanner...</b>: scan LJK langsung ke folder ini (lihat halaman berikut).",
+                        "<b>Ingat folder ini untuk ujian berikutnya</b>: bila dicentang, folder ini dipakai lagi untuk "
+                        "ujian berikutnya. Bawaannya tidak dicentang: setelah rekap diekspor atau saat <b>Ujian baru</b>, "
+                        "kolom folder dikosongkan (file di folder tidak dihapus), jadi scan baru tidak tercampur dengan LJK lama.",
                         "Daftar file yang ditemukan. Pastikan jumlahnya sesuai jumlah LJK.",
                         "<b>Daftar peserta</b> (opsional): file Excel/CSV berisi No. Peserta (atau NIS/NIP/NIK), nama, dan kelompok (kelas/divisi). Pilih kolom yang "
                         "sesuai. Dengan daftar ini, nama dan kelompok otomatis masuk rekap, dan peserta yang tidak ikut "
@@ -328,7 +331,9 @@ def main(shots, out_pdf):
               shot("06_hasil"),
               numbered(["<b>Nama ujian</b>: muncul sebagai judul di rekap Excel, mis. <i>Tes Rekrutmen Batch 3</i> atau <i>PTS IPA Kelas 9A</i>.",
                         "<b>Folder hasil</b>: berisi nilai dan gambar LJK yang sudah ditandai. Klik <b>Pilih...</b> "
-                        "untuk folder lain."]),
+                        "untuk folder lain.",
+                        "<b>Ingat folder ini untuk ujian berikutnya</b>: sama seperti di Langkah 3. Bila tidak dicentang, "
+                        "program mengusulkan folder hasil baru di samping folder scan."]),
               p("Bila folder hasil sudah berisi hasil sebelumnya, muncul tiga pilihan:"),
               table([["Pilihan", "Kapan dipakai"],
                      ["Hapus hasil lama lalu proses ulang", "Kunci atau template diubah dan semua LJK perlu dinilai ulang."],
