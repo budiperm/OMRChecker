@@ -578,6 +578,16 @@ def spaced(key, group=5):
     return " ".join(key[i : i + group] for i in range(0, len(key), group))
 
 
+def remember_box(parent, wizard, key):
+    """'Remember this folder' checkbox, saved as an app preference (off by default)."""
+    var = tk.BooleanVar(value=wizard.prefs[key])
+    box = ttk.Checkbutton(parent, text="Ingat folder ini untuk ujian berikutnya", variable=var,
+                          command=lambda: wizard.set_pref(key, var.get()))  # fmt: skip
+    box.pack(anchor="w", padx=6, pady=(0, 4))
+    box.var = var
+    return box
+
+
 class ScansStep(Step):
     title = "Folder LJK peserta & daftar peserta"
     hint = "Pilih folder hasil scan (JPG/PNG/PDF, subfolder ikut dibaca) atau scan langsung. Daftar peserta opsional."
@@ -592,6 +602,7 @@ class ScansStep(Step):
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
         ttk.Button(row, text="Scan dari scanner...", command=self.scan_paper).pack(side="left")
+        self.remember = remember_box(f, wizard, ujian.PREF_SCANS)
         self.count = tk.StringVar()
         ttk.Label(f, textvariable=self.count).pack(anchor="w", padx=6)
         self.files = tk.Listbox(f, height=8)
@@ -694,7 +705,8 @@ class ScansStep(Step):
             return False
         if Path(folder).resolve() != Path(self.exam.scans_dir or ".").resolve():
             self.exam.corrections = {}
-            self.exam.output_dir = ""
+            if not self.wizard.prefs[ujian.PREF_OUTPUT]:
+                self.exam.output_dir = ""
         self.exam.scans_dir = str(Path(folder))
         path = self.students.get().strip()
         cols = {k: v.get() for k, v in self.col_vars.items() if v.get()}
@@ -728,6 +740,7 @@ class OutputStep(Step):
         self.folder = tk.StringVar()
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
+        self.remember = remember_box(f, wizard, ujian.PREF_OUTPUT)
         self.existing = tk.StringVar()
         ttk.Label(f, textvariable=self.existing, foreground=theme.WARN).pack(anchor="w", padx=6)
         self.policy = tk.StringVar(value="replace")
@@ -1272,10 +1285,13 @@ class ExportStep(Step):
         return True
 
     def new_exam(self):
-        if not messagebox.askyesno(APP_TITLE, "Mulai ujian baru dengan template yang sama?\n(Kunci, folder, dan koreksi dikosongkan.)", parent=self):
+        kept = any(self.wizard.prefs.values())
+        cleared = "Kunci, koreksi, dan folder yang tidak diingat" if kept else "Kunci, folder, dan koreksi"
+        if not messagebox.askyesno(APP_TITLE, f"Mulai ujian baru dengan template yang sama?\n({cleared} dikosongkan.)", parent=self):
             return
-        template = self.exam.template
-        self.wizard.set_exam(ujian.Exam(template=template))
+        exam = ujian.Exam(template=self.exam.template, scans_dir=self.exam.scans_dir, output_dir=self.exam.output_dir)
+        ujian.forget_folders(exam, self.wizard.prefs)
+        self.wizard.set_exam(exam)
         self.wizard.go(1)
 
 
@@ -1383,6 +1399,9 @@ class Wizard(tk.Tk):
         self.library = Path(library or ujian.library_dir())
         self.settings = settings
         self.exam = ujian.Exam.load(settings)
+        self.prefs = ujian.load_prefs(settings)
+        if self.exam.exported_file:  # finished last time: the next exam starts with fresh folders
+            ujian.forget_folders(self.exam, self.prefs)
         self.template = None
         self.students = []
         self.reprocess = False
@@ -1499,6 +1518,13 @@ class Wizard(tk.Tk):
         rows, errors = ujian.read_results(self.exam.output_dir)
         return ujian.score_results(rows, errors, self.exam, self.template.sections, self.students,
                                    blank_source=self.template.source)  # fmt: skip
+
+    def set_pref(self, key, value):
+        self.prefs[key] = bool(value)
+        try:
+            ujian.save_prefs(self.prefs, self.settings)
+        except OSError:
+            pass
 
     def set_exam(self, exam):
         self.exam = exam

@@ -449,6 +449,43 @@ class Exam:
         return cls(**known)
 
 
+PREFS_FILE = "preferensi.json"  # app preferences, next to the session file
+PREF_SCANS = "ingat_folder_scan"  # keep the scan folder for the next exam
+PREF_OUTPUT = "ingat_folder_hasil"  # keep the output folder for the next exam
+
+
+def prefs_path(session=None):
+    return Path(session or Exam.session_path()).with_name(PREFS_FILE)
+
+
+def load_prefs(session=None):
+    """App preferences; both folder options are off unless switched on."""
+    prefs = {PREF_SCANS: False, PREF_OUTPUT: False}
+    try:
+        data = json.loads(prefs_path(session).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return prefs
+    if isinstance(data, dict):
+        prefs.update({k: bool(data[k]) for k in prefs if k in data})
+    return prefs
+
+
+def save_prefs(prefs, session=None):
+    path = prefs_path(session)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(prefs, indent=1), encoding="utf-8")
+
+
+def forget_folders(exam, prefs):
+    """Clear the scan / output folder unless the user asked to remember it,
+    so the next exam does not start in a folder that already holds sheets."""
+    if not prefs.get(PREF_SCANS):
+        exam.scans_dir = ""
+    if not prefs.get(PREF_OUTPUT):
+        exam.output_dir = ""
+    exam.corrections = {}
+
+
 def open_exam(folder, lib=None):
     """The exam saved in an output folder. Raises ValueError with a message
     for the user when the folder holds no exam or its template is gone."""
