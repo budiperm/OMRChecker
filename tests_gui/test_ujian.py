@@ -80,7 +80,7 @@ def test_manual_correction_rescores():
     e = exam(corrections={"a.jpg": {"q3": "C", "NIS": "77"}})
     res = ujian.score_results([row("a.jpg", ["A", "B", "", "D", "E"], KodeSoal="101", NIS="")], [], e, Q5)[0]
     assert res.correct == 5 and res.nis == "77" and res.corrected
-    assert "NIS kosong" not in res.flags
+    assert "No. peserta kosong" not in res.flags
 
 
 def test_identity_flags_and_student_list():
@@ -99,8 +99,8 @@ def test_identity_flags_and_student_list():
     res = {r.file_id: r for r in ujian.score_results(rows, [{"file_id": "x.jpg"}], exam(), Q5, students)}
     assert res["a.jpg"].name == "Ani Lestari" and res["a.jpg"].kelas == "9A"  # name from the list
     assert any("dobel" in f for f in res["b.jpg"].flags)
-    assert "NIS tidak ada di daftar siswa" in res["d.jpg"].flags
-    assert "NIS kosong" in res["e.jpg"].flags
+    assert "No. peserta tidak ada di daftar peserta" in res["d.jpg"].flags
+    assert "No. peserta kosong" in res["e.jpg"].flags
     assert res["x.jpg"].unreadable
     absent = ujian.absent_students(list(res.values()), students)
     assert [s["nis"] for s in absent] == ["0099"]
@@ -114,7 +114,7 @@ def test_sheet_without_nis_matches_students_by_name():
     rows = [row("a.jpg", list("ABCDE"), Nama="ANDI  "), row("b.jpg", list("ABCDE"), Nama="ORANG LAIN")]
     res = {r.file_id: r for r in ujian.score_results(rows, [], ujian.Exam(), Q5, students)}
     assert res["a.jpg"].student["kelas"] == "A" and res["a.jpg"].flags == []  # no "NIS kosong"
-    assert res["b.jpg"].flags == ["Nama tidak ada di daftar siswa"]
+    assert res["b.jpg"].flags == ["Nama tidak ada di daftar peserta"]
 
 
 def test_weighted_questions():
@@ -169,6 +169,13 @@ def test_student_list_from_excel_and_csv(tmp_path):
     assert cols["kelas"] == "Rombel" and students[0]["nis"] == "0012"
 
 
+def test_student_list_company_headers():
+    assert ujian.guess_student_columns(["No", "NIP", "Nama Karyawan", "Divisi"]) == {
+        "nis": "NIP", "nama": "Nama Karyawan", "kelas": "Divisi"}  # fmt: skip
+    assert ujian.guess_student_columns(["No. Peserta", "Nama", "Kelompok"]) == {
+        "nis": "No. Peserta", "nama": "Nama", "kelas": "Kelompok"}  # fmt: skip
+
+
 def test_item_analysis():
     rows = [
         row("a.jpg", list("ABCDE"), KodeSoal="101", NIS="1"),
@@ -199,10 +206,10 @@ def test_export_excel(tmp_path):
     ws = wb["Rekap Nilai"]
     assert ws["A1"].value == "PAS IPA Kelas 9"
     header = [c.value for c in ws[5]]
-    assert header[:10] == ["No", "NIS", "Nama", "Kelas", "Kode Naskah", "Benar", "Salah", "Kosong", "Skor", "Nilai"]
+    assert header[:10] == ["No", "No. Peserta", "Nama", "Kelompok", "Kode Naskah", "Benar", "Salah", "Kosong", "Skor", "Nilai"]
     data = {ws.cell(r, 2).value: [c.value for c in ws[r]] for r in range(6, 8)}
-    assert data["1"][9] == 100 and data["1"][10] == "Tuntas"
-    assert data["2"][9] == 60 and data["2"][10] == "Belum tuntas"
+    assert data["1"][9] == 100 and data["1"][10] == "Lulus"
+    assert data["2"][9] == 60 and data["2"][10] == "Tidak lulus"
     flagged_row = next(r for r in range(6, 8) if ws.cell(r, 2).value == "2")
     assert ws.cell(flagged_row, 1).fill.fgColor.rgb.endswith("F8CBAD")  # not in list -> red
     assert [c.value for c in wb["Tidak Ikut Ujian"][2]] == [1, "9", "Absen", "9A"]

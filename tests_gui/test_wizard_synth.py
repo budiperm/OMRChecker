@@ -226,3 +226,71 @@ def test_choice_dialog_returns_clicked_key(setup):
         assert d.choice is None
     finally:
         w.destroy()
+
+
+def test_old_exam_can_be_reopened_from_its_output_folder(setup, monkeypatch):
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)  # confirm "Ujian baru"
+    monkeypatch.setattr(wz.ChoiceDialog, "ask", staticmethod(lambda *a, **k: "tutup"))  # skip the export
+    hasil = tmp / "hasil"
+    ujian.Exam(scans_dir=str(scans), output_dir=str(hasil), name="Tes Rekrutmen").save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        run_to_results(w)
+        w.exam.corrections = {"siswa_1.jpg": {"q1": "B"}}
+        w.exam.save(w.settings)
+        assert (hasil / ujian.EXAM_FILE).is_file()
+        w.next()
+        w.steps[5].new_exam()  # the session now holds an empty exam
+        assert w.exam.corrections == {} and w.exam.output_dir == ""
+
+        monkeypatch.setattr(wz.filedialog, "askdirectory", lambda **k: str(hasil))
+        w.open_exam()
+        pump(w)
+        assert w.current == 5
+        assert w.exam.name == "Tes Rekrutmen" and w.exam.corrections == {"siswa_1.jpg": {"q1": "B"}}
+        assert all(step.exam is w.exam for step in w.steps)
+        assert len(w.steps[5].results) == 3
+        assert ujian.Exam.load(tmp / "sesi.json").output_dir == str(hasil)  # it is the current exam again
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+
+
+def test_open_exam_messages(setup, tmp_path):
+    lib, _, _ = setup
+    with pytest.raises(ValueError, match="bukan folder hasil"):
+        ujian.open_exam(tmp_path, lib)
+    folder = tmp_path / "hasil_lain"
+    folder.mkdir()
+    # made on another computer: template path differs, same name in this library
+    exam = ujian.Exam(template=str(tmp_path / "pc-lain" / "LJK Sintetis"), output_dir=str(folder))
+    exam.save(tmp_path / "sesi.json")
+    opened = ujian.open_exam(folder, lib)
+    assert Path(opened.template) == lib / "LJK Sintetis"
+    exam.template = str(tmp_path / "Tidak Ada")
+    exam.save(tmp_path / "sesi.json")
+    with pytest.raises(ValueError, match="Tidak Ada"):
+        ujian.open_exam(folder, lib)
+
+
+def test_about_shows_license(setup, monkeypatch):
+    import wizard as wz
+
+    lib, _, tmp = setup
+    shown = []
+    monkeypatch.setattr(wz.ChoiceDialog, "ask", staticmethod(lambda m, h, t, b, detail="": (shown.append(h), "lisensi")[1]))
+    monkeypatch.setattr(wz, "show_text", lambda parent, title, text: shown.append(text))
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        w.about()
+        assert shown[0] == f"Pemindai LJK v{wz.VERSION}"
+        assert "MIT License" in shown[1] and "Udayraj" in shown[1]
+    finally:
+        w.destroy()

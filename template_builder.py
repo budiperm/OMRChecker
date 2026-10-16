@@ -630,7 +630,7 @@ def suggest_group(block):
         if block.cols in (3, 4):
             return "KodeSoal"
         if block.cols >= 7:
-            return "NIS"
+            return "NoPeserta"
     return ""
 
 

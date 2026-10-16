@@ -17,9 +17,9 @@ set "TWAINDSM="
 if exist vendor\TWAINDSM.dll set "TWAINDSM=--add-binary vendor\TWAINDSM.dll;."
 pyinstaller --noconfirm --clean --onefile --windowed --name OMRChecker ^
   --noupx --paths . --collect-submodules src ^
-  --hidden-import openpyxl --hidden-import win32com.client --hidden-import pythoncom ^
+  --hidden-import openpyxl --hidden-import xlrd --hidden-import win32com.client --hidden-import pythoncom ^
   --hidden-import pywintypes --collect-data sv_ttk --icon assets\icon.ico ^
-  --add-data assets\icon.ico;assets --add-data assets\icon.png;assets --add-data assets\logo.png;assets %TWAINDSM% ^
+  --add-data assets\icon.ico;assets --add-data assets\icon.png;assets --add-data assets\logo.png;assets --add-data LICENSE;. %TWAINDSM% ^
   gui.py || goto :error
 xcopy /e /i /y samples dist\samples >nul
 copy /y PANDUAN.pdf dist\ >nul

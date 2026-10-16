@@ -51,7 +51,7 @@ def open_path(path):
         subprocess.Popen(["xdg-open", path])
 
 
-RESULT_ENTRIES = {"Results", "CheckedOMRs", "Manual", "Evaluation", "omrchecker_log.txt"}
+RESULT_ENTRIES = {"Results", "CheckedOMRs", "Manual", "Evaluation", "omrchecker_log.txt", "ujian.json"}
 
 
 def foreign_files(folder):

@@ -5,7 +5,7 @@
  - template library (templates kept in the app data folder, not in scan folders)
  - exam settings that persist between sessions
  - scoring with one answer key per exam code (kode naskah), manual corrections
- - matching against a student list (Excel/CSV)
+ - matching against a participant list (Excel/CSV)
  - item analysis and the Excel export
 
 """
@@ -20,6 +20,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+EXAM_FILE = "ujian.json"  # exam settings kept in its output folder
 ALL_CODES = "*"  # key used for every sheet when there is no exam-code column
 OPTIONS_ORDER = ["A", "B", "C", "D", "E"]
 
@@ -372,9 +373,18 @@ class Exam:
         return app_data_dir() / "ujian_terakhir.json"
 
     def save(self, path=None):
+        """Save as the current session, plus a copy in the output folder (when
+        it exists) so this exam can be opened again later (open_exam)."""
         path = Path(path or self.session_path())
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(self), indent=1, ensure_ascii=False), encoding="utf-8")
+        text = json.dumps(asdict(self), indent=1, ensure_ascii=False)
+        path.write_text(text, encoding="utf-8")
+        out = Path(self.output_dir) if self.output_dir else None
+        if out is not None and out.is_dir():
+            try:
+                (out / EXAM_FILE).write_text(text, encoding="utf-8")
+            except OSError:  # read-only or vanished folder: the session copy is enough
+                pass
 
     @classmethod
     def load(cls, path=None):
@@ -385,6 +395,34 @@ class Exam:
             return cls()
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
         return cls(**known)
+
+
+def open_exam(folder, lib=None):
+    """The exam saved in an output folder. Raises ValueError with a message
+    for the user when the folder holds no exam or its template is gone."""
+    folder = Path(folder)
+    path = folder / EXAM_FILE
+    if not path.is_file():
+        raise ValueError(
+            "Folder ini bukan folder hasil ujian (tidak ada file ujian.json).\n"
+            "Pilih folder hasil yang dipakai di Langkah 4."
+        )
+    try:
+        json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ValueError(f"File ujian.json tidak bisa dibaca:\n{e}") from e
+    exam = Exam.load(path)
+    exam.output_dir = str(folder)  # the folder may have been moved or copied
+    template = Path(exam.template) if exam.template else None
+    if template is None or not (template / "template.json").is_file():
+        # another computer or user: look for a template of the same name in this library
+        same = Path(lib or library_dir()) / (template.name if template else "")
+        if template is not None and (same / "template.json").is_file():
+            exam.template = str(same)
+        else:
+            name = template.name if template else "?"
+            raise ValueError(f"Template '{name}' untuk ujian ini tidak ada di pustaka template. Impor atau buat dulu template itu.")
+    return exam
 
 
 def rekap_state(exam):
@@ -586,18 +624,18 @@ def score_results(rows, errors, exam, questions, students=None, blank_source="")
             continue
         if not res.has_nis:
             if students and res.student is None:
-                res.flags.append("Nama tidak ada di daftar siswa")
+                res.flags.append("Nama tidak ada di daftar peserta")
             continue
         nis = normalize_nis(res.nis)
         if not res.nis.strip():
-            res.flags.append("NIS kosong")
+            res.flags.append("No. peserta kosong")
         else:
             seen.setdefault(nis, []).append(res)
         if students and res.nis.strip() and res.student is None:
-            res.flags.append("NIS tidak ada di daftar siswa")
+            res.flags.append("No. peserta tidak ada di daftar peserta")
     for dup in (v for v in seen.values() if len(v) > 1):
         for res in dup:
-            res.flags.append("NIS dobel: " + ", ".join(o.file_id for o in dup if o is not res))
+            res.flags.append("No. peserta dobel: " + ", ".join(o.file_id for o in dup if o is not res))
     results.sort(key=lambda x: (not x.flags, natural_key(x.kelas), natural_key(x.name), x.file_id))
     return results
 
@@ -672,9 +710,10 @@ def summary(results):
 # ---------------------------------------------------------------------------
 
 COLUMN_HINTS = {
-    "nis": ("nis", "nisn", "no induk", "nomor induk", "no peserta", "nomor peserta", "no. peserta"),
+    "nis": ("no. peserta", "no peserta", "nomor peserta", "nopeserta", "nis", "nisn", "nip", "nik",
+            "no induk", "nomor induk", "id peserta", "id karyawan"),
     "nama": ("nama", "name"),
-    "kelas": ("kelas", "rombel", "class"),
+    "kelas": ("kelompok", "kelas", "rombel", "class", "divisi", "bagian", "unit", "departemen", "ruang"),
 }
 
 
@@ -707,7 +746,7 @@ def load_students(path, columns=None):
     headers, rows = read_table(path)
     columns = columns or guess_student_columns(headers)
     if not columns.get("nis") and not columns.get("nama"):
-        raise ValueError("Kolom NIS atau Nama tidak ditemukan di daftar siswa")
+        raise ValueError("Kolom No. Peserta atau Nama tidak ditemukan di daftar peserta")
     students = []
     for r in rows:
         s = {k: str(r.get(h, "")).strip() for k, h in columns.items() if h}
@@ -802,11 +841,11 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     ws["A2"] = (
         f"Peserta: {stats['peserta']}   Rata-rata: {stats['rata']}   "
         f"Tertinggi: {stats['tertinggi']}   Terendah: {stats['terendah']}"
-        + (f"   Tuntas (KKM {exam.kkm:g}): {stats['tuntas']}" if exam.kkm else "")
+        + (f"   Lulus (batas {exam.kkm:g}): {stats['tuntas']}" if exam.kkm else "")
     )
     ws["A3"] = f"Diekspor: {time.strftime('%d-%m-%Y %H:%M')}"
-    id_cols = [c for c in _identity_columns(results) if c not in ("NIS", "Nama", exam.code_column)]
-    headers = ["No", "NIS", "Nama", "Kelas", *id_cols]
+    id_cols = [c for c in _identity_columns(results) if c not in ("NIS", "NoPeserta", "Nama", exam.code_column)]
+    headers = ["No", "No. Peserta", "Nama", "Kelompok", *id_cols]
     if exam.code_column:
         headers.append("Kode Naskah")
     for sec in named:
@@ -825,7 +864,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
             row += [part.get("benar"), part.get("nilai")]
         row += [r.correct, r.wrong, r.blank, r.score, r.grade]
         if exam.kkm:
-            row.append("" if r.passed is None else "Tuntas" if r.passed else "Belum tuntas")
+            row.append("" if r.passed is None else "Lulus" if r.passed else "Tidak lulus")
         row += ["; ".join(r.flags), r.file_id]
         rows.append(row)
     table(ws, 5, headers, rows, {"Catatan": 50})
@@ -837,7 +876,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     # Jawaban per soal
     ws = wb.create_sheet("Jawaban")
     labels = [(sec, q) for sec, qs in sections.items() for q in qs]
-    lead = ["NIS", "Nama"] + (["Kode Naskah"] if exam.code_column else [])
+    lead = ["No. Peserta", "Nama"] + (["Kode Naskah"] if exam.code_column else [])
     headers = lead + [question_label(sec, q) for sec, q in labels]
     rows = [[r.nis, r.name] + ([r.code] if exam.code_column else []) + [r.answers[q] for _, q in labels]
             for r in results]  # fmt: skip
@@ -864,7 +903,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     if students:
         ws = wb.create_sheet("Tidak Ikut Ujian")
         missing = absent_students(results, students)
-        table(ws, 1, ["No", "NIS", "Nama", "Kelas"],
+        table(ws, 1, ["No", "No. Peserta", "Nama", "Kelompok"],
               [[i, s.get("nis", ""), s.get("nama", ""), s.get("kelas", "")]
                for i, s in enumerate(missing, 1)])  # fmt: skip
 

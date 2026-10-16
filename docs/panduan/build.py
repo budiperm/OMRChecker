@@ -191,13 +191,13 @@ def main(shots, out_pdf):
                      ["Sebelum mulai", "Persyaratan, memasang program, menyiapkan scanner, tips scan LJK"],
                      ["Langkah 1", "Memilih atau membuat template LJK"],
                      ["Langkah 2", "Mengisi kunci jawaban dan aturan nilai"],
-                     ["Langkah 3", "Memilih folder LJK siswa atau scan langsung dari scanner; daftar siswa"],
+                     ["Langkah 3", "Memilih folder LJK peserta atau scan langsung dari scanner; daftar peserta"],
                      ["Langkah 4", "Folder hasil dan nama ujian"],
                      ["Langkah 5", "Memproses LJK, memeriksa baris merah, koreksi manual"],
                      ["Langkah 6", "Rekap nilai, analisis butir soal, ekspor ke Excel"],
                      ["Jika ada masalah", "Masalah umum dan cara mengatasinya"]], [38 * mm, W - 38 * mm])]  # fmt: skip
     story += [Spacer(1, 8), p("Cara kerja singkat", "h2"),
-              p("Program membaca bulatan yang dihitamkan siswa pada hasil scan LJK, mencocokkannya dengan kunci "
+              p("Program membaca bulatan yang dihitamkan peserta pada hasil scan LJK, mencocokkannya dengan kunci "
                 "jawaban, lalu menghitung nilai. Satu kali pemeriksaan selalu melalui <b>6 langkah</b> yang tampil "
                 "di sisi kiri jendela. Langkah yang sudah selesai diberi tanda centang hijau; langkah yang sedang "
                 "dikerjakan disorot biru. Klik <b>Lanjut</b> di kanan bawah untuk pindah ke langkah berikutnya, "
@@ -256,15 +256,15 @@ def main(shots, out_pdf):
               shot("02_editor"),
               numbered(["<b>Buka scan LJK kosong</b>: memilih file LJK kosong (bisa diulang bila salah file).",
                         "<b>Daftar blok</b>. Kotak biru = blok soal pilihan ganda, kotak hijau = blok angka "
-                        "(NIS, kode soal, tanggal). Klik blok di daftar atau di gambar untuk memilihnya; "
+                        "(No. peserta, kode soal, tanggal). Klik blok di daftar atau di gambar untuk memilihnya; "
                         "blok terpilih berwarna merah.",
-                        "<b>Isi blok terpilih</b>. Untuk blok angka, isi <b>Nama kolom</b>: misalnya <i>NIS</i>, "
+                        "<b>Isi blok terpilih</b>. Untuk blok angka, isi <b>Nama kolom</b>: misalnya <i>NoPeserta</i>, "
                         "<i>KodeSoal</i>, <i>TglLahir</i>. Blok dengan nama kolom sama digabung berurutan "
                         "(TGL, BLN, THN → TglLahir). Untuk blok soal, periksa <b>No. soal awal</b> dan "
                         "<b>Pilihan</b> (A–E).",
                         "Klik <b>Terapkan</b> setiap selesai mengubah isi blok.",
-                        "<b>Simpan ke pustaka template</b>, lalu beri nama template (mis. <i>LJK Ujian Sekolah</i>).",
-                        "<b>Uji dengan LJK terisi</b> (disarankan): pilih satu LJK yang sudah diisi siswa untuk "
+                        "<b>Simpan ke pustaka template</b>, lalu beri nama template (mis. <i>LJK Ujian Umum</i>).",
+                        "<b>Uji dengan LJK terisi</b> (disarankan): pilih satu LJK yang sudah diisi peserta untuk "
                         "memastikan bacaan program sudah benar."])]
     story += [note("Blok yang terlewat bisa dibuat sendiri dengan menarik kotak di gambar. Blok yang bukan bulatan "
                    "jawaban (mis. logo) bisa dihapus atau diberi jenis <i>Abaikan</i>. Bila satu blok berisi beberapa "
@@ -286,20 +286,20 @@ def main(shots, out_pdf):
                         "<b>Bobot benar</b> (opsional): nilai berbeda per nomor soal, mis. <font name='Courier'>"
                         "1-10:2, 11-20:1</font> artinya soal 1–10 bernilai 2 dan soal 11–20 bernilai 1.",
                         "<b>Penilaian</b>: poin untuk jawaban benar, salah, dan kosong; centang <b>Nilai dalam skala "
-                        "0-100</b> untuk nilai akhir 0–100; isi <b>KKM</b> bila ingin tahu jumlah siswa yang tuntas."]),
+                        "0-100</b> untuk nilai akhir 0–100; isi <b>Nilai batas lulus</b> bila ingin tahu jumlah peserta yang lulus."]),
               note("Nilai salah boleh negatif (mis. -0,25) bila ujian memakai sistem pengurangan nilai."),
               PageBreak()]
 
     # ---- step 3
-    story += step_head(3, "Folder LJK siswa & daftar siswa")
-    story += [p("Tentukan folder berisi hasil scan LJK siswa. Ada dua cara: memilih folder yang sudah berisi hasil scan, "
+    story += step_head(3, "Folder LJK peserta & daftar peserta")
+    story += [p("Tentukan folder berisi hasil scan LJK peserta. Ada dua cara: memilih folder yang sudah berisi hasil scan, "
                 "atau scan langsung dari scanner ke folder itu."),
               shot("04_folder"),
               numbered(["<b>Pilih...</b>: memilih folder berisi file JPG/PNG/PDF. Subfolder ikut dibaca.",
                         "<b>Scan dari scanner...</b>: scan LJK langsung ke folder ini (lihat halaman berikut).",
                         "Daftar file yang ditemukan. Pastikan jumlahnya sesuai jumlah LJK.",
-                        "<b>Daftar siswa</b> (opsional): file Excel/CSV berisi NIS, nama, dan kelas. Pilih kolom yang "
-                        "sesuai. Dengan daftar ini, nama dan kelas otomatis masuk rekap, dan siswa yang tidak ikut "
+                        "<b>Daftar peserta</b> (opsional): file Excel/CSV berisi No. Peserta (atau NIS/NIP/NIK), nama, dan kelompok (kelas/divisi). Pilih kolom yang "
+                        "sesuai. Dengan daftar ini, nama dan kelompok otomatis masuk rekap, dan peserta yang tidak ikut "
                         "ujian ikut terdaftar."]),
               PageBreak(),
               p("Scan langsung dari scanner", "h2"),
@@ -325,7 +325,7 @@ def main(shots, out_pdf):
     story += [p("Tentukan nama ujian dan folder tempat menyimpan hasil. Folder hasil harus <b>terpisah</b> dari folder "
                 "scan; program otomatis mengusulkan folder <i>[nama folder scan]_hasil</i>."),
               shot("06_hasil"),
-              numbered(["<b>Nama ujian</b>: muncul sebagai judul di rekap Excel, mis. <i>PTS IPA Kelas 9A</i>.",
+              numbered(["<b>Nama ujian</b>: muncul sebagai judul di rekap Excel, mis. <i>Tes Rekrutmen Batch 3</i> atau <i>PTS IPA Kelas 9A</i>.",
                         "<b>Folder hasil</b>: berisi nilai dan gambar LJK yang sudah ditandai. Klik <b>Pilih...</b> "
                         "untuk folder lain."]),
               p("Bila folder hasil sudah berisi hasil sebelumnya, muncul tiga pilihan:"),
@@ -357,17 +357,17 @@ def main(shots, out_pdf):
               table([["Keterangan", "Yang perlu dilakukan"],
                      ["LJK tidak terbaca (kotak sudut/halaman tidak ditemukan)",
                       "Lembar kosong, terpotong, atau buram. Scan ulang lembar itu, lalu proses lagi."],
-                     ["Jawaban ganda", "Siswa menghitamkan lebih dari satu pilihan. Periksa gambar, koreksi bila perlu."],
-                     ["NIS kosong / NIS tidak ada di daftar siswa", "Periksa NIS di LJK, lalu betulkan lewat Koreksi."],
-                     ["NIS dobel", "Dua LJK memakai NIS yang sama. Periksa kedua lembar."],
-                     ["Nama tidak ada di daftar siswa", "Cocokkan dengan daftar siswa, betulkan lewat Koreksi."],
+                     ["Jawaban ganda", "Peserta menghitamkan lebih dari satu pilihan. Periksa gambar, koreksi bila perlu."],
+                     ["No. peserta kosong / tidak ada di daftar peserta", "Periksa nomor peserta di LJK, lalu betulkan lewat Koreksi."],
+                     ["No. peserta dobel", "Dua LJK memakai nomor peserta yang sama. Periksa kedua lembar."],
+                     ["Nama tidak ada di daftar peserta", "Cocokkan dengan daftar peserta, betulkan lewat Koreksi."],
                      ["Kode naskah tidak punya kunci jawaban", "Isi kunci untuk kode itu di Langkah 2."]],
                     [70 * mm, W - 70 * mm]),  # fmt: skip
               PageBreak(),
               p("Koreksi manual", "h2"),
               p("Bila program salah membaca (mis. bulatan tipis atau bekas hapusan), betulkan lewat jendela Koreksi:"),
               shot("09_koreksi", width=W * 0.85),
-              numbered(["<b>Identitas</b>: NIS, kode soal, tanggal lahir, dan isian lain yang terbaca.",
+              numbered(["<b>Identitas</b>: nomor peserta, kode soal, tanggal lahir, dan isian lain yang terbaca.",
                         "<b>Jawaban</b>: satu huruf per soal. Tanda <b>-</b> berarti kosong; <b>(AC)</b> berarti lebih "
                         "dari satu tanda.",
                         "<b>Kembalikan ke hasil scan</b>: membatalkan semua koreksi untuk LJK ini.",
@@ -378,7 +378,7 @@ def main(shots, out_pdf):
     # ---- step 6
     story += step_head(6, "Rekap & ekspor")
     story += [shot("10_rekap"),
-              numbered(["Ringkasan nilai: jumlah LJK, rata-rata, tertinggi, terendah, jumlah tuntas (bila KKM diisi), "
+              numbered(["Ringkasan nilai: jumlah LJK, rata-rata, tertinggi, terendah, jumlah lulus (bila nilai batas lulus diisi), "
                         "dan yang perlu dicek.",
                         "<b>Analisis butir soal</b>: persentase benar tiap soal dan sebaran jawaban A–E. Kategori: "
                         "<b>Mudah</b> (lebih dari 70% benar), <b>Sedang</b> (30–70%), <b>Sukar</b> (kurang dari 30%).",
@@ -389,10 +389,10 @@ def main(shots, out_pdf):
                         "dikosongkan; template tetap."]),
               p("Isi file Excel", "h2"),
               table([["Sheet", "Isi"],
-                     ["Rekap Nilai", "Nama, NIS, kelas, jumlah benar/salah/kosong dan nilai per bagian, nilai akhir"],
-                     ["Jawaban", "Jawaban setiap siswa untuk setiap soal"],
+                     ["Rekap Nilai", "Nama, No. Peserta, kelompok, jumlah benar/salah/kosong dan nilai per bagian, nilai akhir"],
+                     ["Jawaban", "Jawaban setiap peserta untuk setiap soal"],
                      ["Analisis Butir", "Tingkat kesukaran dan sebaran jawaban tiap soal"],
-                     ["Tidak Ikut Ujian", "Siswa di daftar siswa yang tidak punya LJK (bila daftar siswa dipakai)"]],
+                     ["Tidak Ikut Ujian", "Peserta di daftar peserta yang tidak punya LJK (bila daftar peserta dipakai)"]],
                     [38 * mm, W - 38 * mm]),  # fmt: skip
               PageBreak(),
               p("Selesai dan menutup program", "h2"),
@@ -427,10 +427,10 @@ def main(shots, out_pdf):
                       "Periksa keempat kotak hitam di sudut ikut terscan, resolusi 200–300 dpi, dan template yang dipilih "
                       "sesuai desain LJK."],
                      ["Banyak jawaban salah baca",
-                      "Siswa memakai pensil terlalu tipis, atau template kurang pas. Coba <b>Uji dengan LJK terisi</b> "
+                      "Peserta memakai pensil terlalu tipis, atau template kurang pas. Coba <b>Uji dengan LJK terisi</b> "
                       "di editor template, lalu perbaiki blok yang meleset."],
-                     ["Nama siswa tidak muncul di rekap",
-                      "Pilih daftar siswa di Langkah 3 dan pastikan kolom NIS/Nama dipilih dengan benar."],
+                     ["Nama peserta tidak muncul di rekap",
+                      "Pilih daftar peserta di Langkah 3 dan pastikan kolom No. Peserta/Nama dipilih dengan benar."],
                      ["Kunci ditandai <i>kelebihan</i>",
                       "Jumlah huruf kunci melebihi jumlah soal bagian itu. Mungkin kunci untuk bagian lain."]],
                     [52 * mm, W - 52 * mm]),  # fmt: skip
