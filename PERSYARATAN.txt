@@ -9,7 +9,7 @@ PERSYARATAN SISTEM (WINDOWS)
 - Ruang disk kosong minimal 500 MB (program ~120 MB, ditambah folder
   hasil scan dan hasil proses).
 - Layar minimal 1366 x 768.
-- TIDAK perlu memasang Python atau program lain: cukup OMRChecker.exe.
+- TIDAK perlu memasang Python atau program lain: cukup installer OMRChecker.
 - Untuk membuka rekap nilai (.xlsx): Microsoft Excel, LibreOffice Calc,
   atau WPS Office.
 
@@ -32,21 +32,30 @@ tidak ditimpa).
 - Scanner tampil dua kali bila punya dua driver: "(TWAIN)" dan "(WIA)".
   Pilih yang TWAIN dulu; bila gagal, coba centang "Tampilkan jendela driver
   scanner", atau pilih versi WIA.
-- TWAIN butuh driver 64-bit (TWAINDSM.dll). Driver yang hanya 32-bit tidak
+- TWAIN butuh driver scanner 64-bit (TWAINDSM.dll sudah disertakan). Driver yang hanya 32-bit tidak
   terbaca; pakai versi WIA-nya atau scan dengan program bawaan scanner.
 - Cek scanner yang terdeteksi: jalankan OMRChecker-debug.exe --cek-scanner
   dari Command Prompt.
 
-MENJALANKAN
------------
-1. Ekstrak OMRChecker-windows.zip ke folder mana saja (mis. Dokumen).
-2. Klik dua kali OMRChecker.exe.
-   Saat pertama dijalankan, Windows SmartScreen mungkin menampilkan
-   "Windows protected your PC" karena program belum bertanda tangan
-   digital: klik "More info" lalu "Run anyway".
-   Pembukaan pertama bisa memakan waktu 10-20 detik.
-3. Ikuti 6 langkah di jendela wizard.
-   Panduan lengkap bergambar: PANDUAN.pdf (di folder yang sama).
+MEMASANG
+--------
+1. Jalankan OMRChecker-Setup-<versi>.exe, baca dan setujui perjanjian
+   lisensi, lalu ikuti langkah instalasi. Semua komponen sudah ada di
+   dalam installer: tidak perlu internet dan tidak perlu memasang Python
+   atau program lain (kecuali driver scanner, lihat di atas).
+   Tanpa hak administrator, pilih "Pasang hanya untuk saya".
+   Windows SmartScreen mungkin menampilkan "Windows protected your PC"
+   karena installer belum bertanda tangan digital: klik "More info" lalu
+   "Run anyway".
+2. Buka OMRChecker dari menu Start atau ikon di desktop, lalu ikuti
+   6 langkah di jendela wizard. Panduan lengkap bergambar: menu Start >
+   Panduan OMRChecker (PANDUAN.pdf).
+3. Untuk melepas: Settings > Apps > OMRChecker > Uninstall. Template dan
+   pengaturan tetap disimpan agar tidak hilang saat memasang ulang.
+
+Versi portabel (tanpa instalasi): ekstrak OMRChecker-windows.zip ke folder
+mana saja, lalu klik dua kali OMRChecker.exe. Pembukaan pertama versi
+portabel bisa memakan waktu 10-20 detik.
 
 Template disimpan di %APPDATA%\OMRChecker\templates.
 Bila program menutup sendiri, lihat %APPDATA%\OMRChecker\crash.log,

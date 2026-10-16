@@ -57,7 +57,7 @@ jobs:
           $notes = "docs/rilis/$tag.md"
           if ($tag -and -not (Test-Path $notes)) {
             $notes = "catatan-rilis.md"
-            "OMRChecker $tag untuk Windows 10/11 64-bit. Unduh **OMRChecker-windows.zip**, ekstrak, lalu jalankan OMRChecker.exe. Panduan: PANDUAN.pdf di dalam zip." | Set-Content $notes
+            "OMRChecker $tag untuk Windows 10/11 64-bit. Unduh **OMRChecker-Setup-$version.exe** lalu jalankan untuk memasang (semua komponen sudah termasuk, tidak perlu internet). Versi portabel tanpa instalasi: OMRChecker-windows.zip." | Set-Content $notes
           }
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
@@ -69,6 +69,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.gui.txt
+
+      - name: Ambil TWAIN DSM 64-bit
+        shell: pwsh
+        run: |
+          # TWAIN Data Source Manager 2.4.3 (LGPL-2.1) from twain/twain-dsm tag v2.5.1, so
+          # TWAIN scanners work without installing anything else. Pinned by commit and hash.
+          $base = "https://raw.githubusercontent.com/twain/twain-dsm/3491bec2960e856f8dd4823dc54245b37beed51d"
+          New-Item -ItemType Directory -Force vendor | Out-Null
+          Invoke-WebRequest "$base/Releases/dsm_020403/windows/64/TWAINDSM.dll" -OutFile vendor\TWAINDSM.dll
+          Invoke-WebRequest "$base/TWAIN_DSM/license.txt" -OutFile vendor\TWAINDSM-LICENSE.txt
+          $hash = (Get-FileHash vendor\TWAINDSM.dll -Algorithm SHA256).Hash
+          if ($hash -ne "F01F4ABB051C38DDDA4169F93E0878FD00D57FB3D95F472B497208D08BD0C783") {
+            Write-Error "Hash TWAINDSM.dll tidak cocok: $hash"; exit 1
+          }
 
       - name: Build exe
         shell: pwsh
@@ -87,6 +101,11 @@ jobs:
           # console variant that prints errors, for troubleshooting
           pyinstaller --noconfirm --onefile --console --name OMRChecker-debug @opts gui.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          # one-folder build for the installer: starts faster than the one-file exe
+          # (no unpacking to %TEMP% on every launch); the installer copies the folder
+          pyinstaller --noconfirm --onedir --windowed --name OMRChecker --distpath dist-installer `
+            --workpath build-installer @opts gui.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Uji exe bisa jalan
         shell: pwsh
@@ -97,6 +116,68 @@ jobs:
                  -RedirectStandardOutput cek.txt -RedirectStandardError cek-err.txt
           Get-Content cek.txt, cek-err.txt
           if ($p.ExitCode -gt 1) { Write-Error "OMRChecker-debug.exe keluar dengan kode $($p.ExitCode)"; exit 1 }
+
+      - name: Kumpulkan lisensi pihak ketiga
+        shell: pwsh
+        run: |
+          python -m pip install pip-licenses
+          $f = "PEMBERITAHUAN-PIHAK-KETIGA.txt"
+          "OMRChecker - Pemindai LJK memakai komponen sumber terbuka berikut." | Set-Content $f -Encoding utf8
+          "Setiap komponen tunduk pada lisensinya sendiri.`r`n" | Add-Content $f -Encoding utf8
+          "==== OMRChecker (proyek asal) ====" | Add-Content $f -Encoding utf8
+          Get-Content LICENSE-OMRChecker-asli-MIT.txt | Add-Content $f -Encoding utf8
+          "`r`n==== Python ====`r`nPython Software Foundation License: https://docs.python.org/3/license.html`r`n" | Add-Content $f -Encoding utf8
+          pip-licenses --from=mixed --with-license-file --no-license-path --format=plain-vertical `
+            --ignore-packages pip-licenses prettytable wcwidth pip setuptools wheel --output-file lisensi.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Get-Content lisensi.txt -Encoding utf8 | Add-Content $f -Encoding utf8
+          "`r`n==== TWAIN Data Source Manager 2.4.3 (TWAINDSM.dll) ====`r`nhttps://github.com/twain/twain-dsm`r`n" | Add-Content $f -Encoding utf8
+          Get-Content vendor\TWAINDSM-LICENSE.txt | Add-Content $f -Encoding utf8
+          Get-Item $f | Format-Table Name, Length
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          & $iscc "/DAppVersion=$env:APP_VERSION" installer\OMRChecker.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Move-Item "dist-installer\OMRChecker-Setup-$env:APP_VERSION.exe" .
+          Get-Item OMRChecker-Setup-*.exe | Format-Table Name, Length
+
+      - name: Uji installer (pasang, jalankan, lepas)
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          $dir = "$env:RUNNER_TEMP\omr-uji"
+          $setup = (Get-Item OMRChecker-Setup-*.exe).FullName
+          $p = Start-Process $setup -Wait -PassThru `
+                 -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"", "/LOG=`"$env:RUNNER_TEMP\setup.log`""
+          if ($p.ExitCode) { Get-Content "$env:RUNNER_TEMP\setup.log"; Write-Error "Instalasi gagal ($($p.ExitCode))"; exit 1 }
+          foreach ($f in "OMRChecker.exe", "PANDUAN.pdf", "LISENSI.txt", "PEMBERITAHUAN-PIHAK-KETIGA.txt", "samples", "unins000.exe", "_internal\TWAINDSM.dll") {
+            if (-not (Test-Path "$dir\$f")) { Write-Error "Tidak terpasang: $f"; exit 1 }
+          }
+          # Run the installed (windowed) program in batch mode on a bundled sample:
+          # proves it starts and can import the whole processing pipeline.
+          $out = "$env:RUNNER_TEMP\omr-uji-hasil"
+          $p = Start-Process "$dir\OMRChecker.exe" -PassThru -ArgumentList "--process", "`"$dir\samples\sample1`"", "`"$out`""
+          $null = $p.Handle  # keeps ExitCode readable after WaitForExit
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Error "OMRChecker.exe hasil instalasi macet"; exit 1 }
+          $log = "$out\omrchecker_log.txt"
+          if (-not (Test-Path $log)) { Write-Error "OMRChecker.exe hasil instalasi tidak menulis log (kode $($p.ExitCode))"; exit 1 }
+          Get-Content $log -Tail 30
+          if ($p.ExitCode -gt 1 -or (Select-String -Path $log -Pattern "ModuleNotFoundError|ImportError" -Quiet)) {
+            Write-Error "OMRChecker.exe hasil instalasi gagal (kode $($p.ExitCode))"; exit 1
+          }
+          $p = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait -PassThru
+          if ($p.ExitCode) { Write-Error "Uninstall gagal ($($p.ExitCode))"; exit 1 }
+          Start-Sleep 5  # the uninstaller finishes in a child process
+          if (Test-Path "$dir\OMRChecker.exe") { Write-Error "Uninstall tidak menghapus program"; exit 1 }
 
       - name: Paketkan zip
         shell: pwsh
@@ -111,6 +192,7 @@ jobs:
         with:
           name: OMRChecker-windows-${{ steps.version.outputs.version }}
           path: |
+            OMRChecker-Setup-*.exe
             OMRChecker-windows.zip
             dist/OMRChecker-debug.exe
           retention-days: 30
@@ -125,5 +207,6 @@ jobs:
           body_path: ${{ steps.version.outputs.notes }}
           prerelease: ${{ steps.version.outputs.prerelease }}
           files: |
+            OMRChecker-Setup-*.exe
             OMRChecker-windows.zip
             dist/OMRChecker-debug.exe

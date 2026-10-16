@@ -35,9 +35,11 @@ Aplikasi berjalan sepenuhnya di komputer Anda (luring). Tidak perlu memasang Pyt
 
 ## Mulai cepat
 
-1. Unduh `OMRChecker-windows.zip` dari [Releases](../../releases/latest), lalu ekstrak.
-2. Jalankan `OMRChecker.exe`. Bila Windows SmartScreen memberi peringatan, klik **More info** lalu **Run anyway**.
-3. Ikuti langkah di layar. Panduan bergambar ada di `PANDUAN.pdf` di dalam zip.
+1. Unduh `OMRChecker-Setup-<versi>.exe` dari [Releases](../../releases/latest), jalankan, lalu ikuti langkah instalasi. Semua komponen sudah ada di dalam installer, jadi tidak perlu internet. Bila Windows SmartScreen memberi peringatan, klik **More info** lalu **Run anyway**.
+2. Buka **OMRChecker** dari menu Start.
+3. Ikuti langkah di layar. Panduan bergambar ada di menu Start > **Panduan OMRChecker**.
+
+Versi portabel tanpa instalasi: unduh `OMRChecker-windows.zip`, ekstrak, lalu jalankan `OMRChecker.exe`.
 
 ### Persyaratan singkat
 
@@ -57,7 +59,7 @@ Rincian lengkap ada di [PERSYARATAN.txt](PERSYARATAN.txt).
 
 - Menjalankan dari kode: `pip install -r requirements.gui.txt` lalu `python gui.py` (Python 3.10+).
 - Build exe di Windows: `build_windows.bat`; dari Linux (Docker + Wine): `./build_windows_docker.sh`.
-- Rilis: naikkan `VERSION` di `wizard.py`, tulis catatan di `docs/rilis/vX.Y.Z.md`, lalu push tag `vX.Y.Z` (atau Actions → *Rilis Windows* → *Run workflow* dengan isian tag). GitHub Actions mem-build exe di Windows dan menerbitkan rilis berisi `OMRChecker-windows.zip` dan `OMRChecker-debug.exe`. Tag `vX.Y.Z-rc1` menjadi pre-release.
+- Rilis: naikkan `VERSION` di `wizard.py`, tulis catatan di `docs/rilis/vX.Y.Z.md`, lalu push tag `vX.Y.Z` (atau Actions → *Rilis Windows* → *Run workflow* dengan isian tag). GitHub Actions mem-build exe di Windows dan menerbitkan rilis berisi installer `OMRChecker-Setup-<versi>.exe` (Inno Setup, skrip di `installer/`), `OMRChecker-windows.zip`, dan `OMRChecker-debug.exe`. Tag `vX.Y.Z-rc1` menjadi pre-release.
 - Panduan PDF dibuat ulang dengan `docs/panduan/shots.py` lalu `docs/panduan/build.py`.
 - Test: `pytest tests_gui -o addopts=""`. Beberapa test memakai contoh LJK asli di `tests_gui/data/` yang tidak ikut di repo; test itu otomatis dilewati.
 
@@ -71,6 +73,6 @@ Pemindai LJK adalah fork dari **[OMRChecker](https://github.com/Udayraj123/OMRCh
 - Dokumentasi mesin OMR, format `template.json`, dan opsi baris perintah: [wiki OMRChecker](https://github.com/Udayraj123/OMRChecker/wiki).
 - Daftar kontributor proyek asal: [Contributors.md](Contributors.md).
 
-Kode dirilis di bawah [Lisensi MIT](LICENSE), sama dengan proyek asal. Pemberitahuan hak cipta asli di berkas `LICENSE` tetap dipertahankan.
+Aplikasi ini gratis dan dirilis di bawah [Lisensi AGPL-3.0](LICENSE): boleh dipakai, dibagikan, dan diubah, asalkan kode sumbernya ikut dibagikan dengan lisensi yang sama. Jasa di sekitarnya (pemasangan, pengaturan, pelatihan, paket bersama scanner) boleh berbayar. Bagian yang berasal dari OMRChecker tetap di bawah Lisensi MIT; pemberitahuan aslinya ada di [LICENSE-OMRChecker-asli-MIT.txt](LICENSE-OMRChecker-asli-MIT.txt).
 
 Bila aplikasi ini bermanfaat, pertimbangkan juga memberi bintang atau dukungan untuk [proyek asalnya](https://github.com/Udayraj123/OMRChecker).
