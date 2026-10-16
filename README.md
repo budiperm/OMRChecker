@@ -26,6 +26,7 @@ Detail: [PERSYARATAN.txt](PERSYARATAN.txt).
 ### Pengembangan
 - Menjalankan dari kode: `pip install -r requirements.gui.txt` lalu `python gui.py` (Python 3.10+).
 - Build exe di Windows: `build_windows.bat`; dari Linux (Docker + Wine): `./build_windows_docker.sh`.
+- Rilis: naikkan `VERSION` di `wizard.py`, tulis catatan di `docs/rilis/vX.Y.Z.md`, lalu push tag `vX.Y.Z` (atau Actions → *Rilis Windows* → *Run workflow* dengan isian tag). GitHub Actions mem-build exe di Windows dan menerbitkan rilis berisi `OMRChecker-windows.zip` dan `OMRChecker-debug.exe`. Tag `vX.Y.Z-rc1` menjadi pre-release.
 - Test: `pytest tests_gui -o addopts=""`. Beberapa test memakai contoh LJK asli di `tests_gui/data/` yang tidak ikut di repo; test itu otomatis dilewati.
 
 ---
