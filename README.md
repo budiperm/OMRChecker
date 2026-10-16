@@ -5,7 +5,8 @@ Fork dari [Udayraj123/OMRChecker](https://github.com/Udayraj123/OMRChecker) deng
 **Unduh:** lihat [Releases](../../releases) → `OMRChecker-windows.zip`.
 
 ### Fitur
-- Wizard 6 langkah: pilih template → kunci jawaban → folder scan → folder hasil → proses → rekap.
+- Wizard 6 langkah dengan tampilan modern bergaya Windows 11 (sidebar langkah, font Segoe UI): pilih template → kunci jawaban → folder scan → folder hasil → proses → rekap. Pemeriksaan baru berjalan setelah tombol "Proses LJK" diklik.
+- Scan langsung dari scanner (TWAIN atau WIA) ke folder LJK: semua lembar di ADF sekaligus, 200/300 dpi, abu-abu/warna, A4/F4.
 - Pembuat template dari LJK kosong (PDF/scan): bulatan, kolom identitas, dan bagian soal dideteksi otomatis; bisa diedit manual.
 - Kunci jawaban per kode naskah dan per bagian, bobot nilai per soal (mis. `1-10=2, 11-20=1`).
 - Koreksi manual hasil baca, daftar siswa dari Excel, analisis butir soal.
@@ -19,6 +20,8 @@ Fork dari [Udayraj123/OMRChecker](https://github.com/Udayraj123/OMRChecker) deng
 - Scan 200–300 dpi (JPG/PNG/PDF); keempat kotak sudut LJK harus ikut terscan.
 
 Detail: [PERSYARATAN.txt](PERSYARATAN.txt).
+
+**Panduan langkah demi langkah:** [PANDUAN.pdf](PANDUAN.pdf) (ikut di dalam zip rilis). Dibuat ulang dengan `docs/panduan/shots.py` lalu `docs/panduan/build.py`.
 
 ### Pengembangan
 - Menjalankan dari kode: `pip install -r requirements.gui.txt` lalu `python gui.py` (Python 3.10+).

@@ -210,6 +210,8 @@ def run_gui(mainloop=True):
     from tkinter import filedialog, messagebox, ttk
     from tkinter.scrolledtext import ScrolledText
 
+    import theme
+
     if sys.platform.startswith("win"):
         try:
             import ctypes
@@ -221,6 +223,7 @@ def run_gui(mainloop=True):
     class App(tk.Tk):
         def __init__(self):
             super().__init__()
+            theme.apply(self)
             self.title(APP_TITLE)
             self.geometry("1100x720")
             self.minsize(820, 560)
@@ -392,10 +395,10 @@ def run_gui(mainloop=True):
             ttk.Button(pbar, text="Pas lebar", command=lambda: self.zoom_preview(None)).pack(side="left", padx=4)
             ttk.Button(pbar, text="Buka di aplikasi", command=self.open_selected_image).pack(side="left")
             self.preview_name = tk.StringVar(value="Pilih baris untuk melihat LJK-nya.")
-            ttk.Label(prev, textvariable=self.preview_name, foreground="gray").pack(anchor="w", padx=2)
+            ttk.Label(prev, textvariable=self.preview_name, foreground=theme.MUTED).pack(anchor="w", padx=2)
             pcv = ttk.Frame(prev)
             pcv.pack(fill="both", expand=True)
-            self.preview = tk.Canvas(pcv, background="#d0d7de", highlightthickness=0)
+            self.preview = tk.Canvas(pcv, background="#e4e8ee", highlightthickness=0)
             pvs = ttk.Scrollbar(pcv, orient="vertical", command=self.preview.yview)
             phs = ttk.Scrollbar(pcv, orient="horizontal", command=self.preview.xview)
             self.preview.configure(yscrollcommand=pvs.set, xscrollcommand=phs.set)
@@ -414,13 +417,13 @@ def run_gui(mainloop=True):
             ttk.Label(
                 res,
                 text="Pilih baris (klik atau tombol panah) untuk melihat LJK yang sudah ditandai di kanan.",
-                foreground="gray",
+                foreground=theme.MUTED,
             ).pack(anchor="w", padx=4, pady=2)
 
             # Log tab
             logf = ttk.Frame(self.tabs)
             self.tabs.add(logf, text="Log")
-            self.log = ScrolledText(logf, wrap="none", font=("Consolas", 9))
+            self.log = ScrolledText(logf, wrap="none", font="TkFixedFont")
             self.log.pack(fill="both", expand=True)
             self.log.configure(state="disabled")
 
@@ -885,6 +888,10 @@ def main():
             return run_batch(sys.argv[2], sys.argv[3])
         if len(sys.argv) == 6 and sys.argv[1] == "--process" and sys.argv[4] == "--template":
             return run_batch(sys.argv[2], sys.argv[3], sys.argv[5])
+        if "--cek-scanner" in sys.argv:  # OMRChecker-debug.exe --cek-scanner
+            import scanner
+
+            return scanner.main()
         if "--lanjutan" in sys.argv:
             run_gui()  # advanced mode: the original single window
         else:

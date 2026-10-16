@@ -11,6 +11,7 @@
 """
 
 import csv
+import hashlib
 import json
 import os
 import re
@@ -363,6 +364,8 @@ class Exam:
     # part -> "1-10:2, 11-20:1": points for a correct answer per question range;
     # questions not listed use `correct`
     weights: dict = field(default_factory=dict)
+    exported_file: str = ""  # last Excel rekap written
+    exported_state: str = ""  # rekap_state() at that moment
 
     @staticmethod
     def session_path():
@@ -382,6 +385,23 @@ class Exam:
             return cls()
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
         return cls(**known)
+
+
+def rekap_state(exam):
+    """Fingerprint of everything the Excel rekap depends on: the result files
+    and the exam settings (keys, scoring, corrections, ...). "" when there are
+    no results yet. A different value after an export means the rekap is out
+    of date (sheets corrected, re-keyed or processed again)."""
+    out = Path(exam.output_dir) if exam.output_dir else None
+    if out is None or not out.is_dir():
+        return ""
+    files = sorted((str(p.relative_to(out)), p.stat().st_mtime_ns)
+                   for pattern in ("Results/Results_*.csv", "Manual/ErrorFiles.csv") for p in out.rglob(pattern))  # fmt: skip
+    if not files:
+        return ""
+    data = {k: v for k, v in asdict(exam).items() if k not in ("exported_file", "exported_state")}
+    data["files"] = files
+    return hashlib.sha1(json.dumps(data, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
 
 def parse_weights(text, count=None):

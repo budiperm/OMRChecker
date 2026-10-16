@@ -22,6 +22,21 @@ SCAN LJK
 - Keempat kotak hitam di sudut LJK harus ikut terscan (jangan terpotong).
   Lembar yang terbalik (atas-bawah) diputar otomatis.
 
+SCAN LANGSUNG DARI SCANNER
+--------------------------
+Di Langkah 3 ada tombol "Scan dari scanner...". Semua lembar di ADF di-scan
+sekaligus ke folder LJK siswa (scan_0001.jpg, scan_0002.jpg, ...; file lama
+tidak ditimpa).
+- Pasang dulu driver scanner dari situs produsen (mis. Epson Scan 2 untuk
+  Epson DS-410, driver Plustek untuk SmartOffice PS283).
+- Scanner tampil dua kali bila punya dua driver: "(TWAIN)" dan "(WIA)".
+  Pilih yang TWAIN dulu; bila gagal, coba centang "Tampilkan jendela driver
+  scanner", atau pilih versi WIA.
+- TWAIN butuh driver 64-bit (TWAINDSM.dll). Driver yang hanya 32-bit tidak
+  terbaca; pakai versi WIA-nya atau scan dengan program bawaan scanner.
+- Cek scanner yang terdeteksi: jalankan OMRChecker-debug.exe --cek-scanner
+  dari Command Prompt.
+
 MENJALANKAN
 -----------
 1. Ekstrak OMRChecker-windows.zip ke folder mana saja (mis. Dokumen).
@@ -31,6 +46,7 @@ MENJALANKAN
    digital: klik "More info" lalu "Run anyway".
    Pembukaan pertama bisa memakan waktu 10-20 detik.
 3. Ikuti 6 langkah di jendela wizard.
+   Panduan lengkap bergambar: PANDUAN.pdf (di folder yang sama).
 
 Template disimpan di %APPDATA%\OMRChecker\templates.
 Bila program menutup sendiri, lihat %APPDATA%\OMRChecker\crash.log,

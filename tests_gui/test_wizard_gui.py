@@ -133,8 +133,12 @@ def test_wizard_full_flow(setup, monkeypatch):
         w.next()
         assert w.current == 4, errors
 
-        # 5. processing starts by itself
+        # 5. processing waits for the click
         step = w.steps[4]
+        pump(w, 20)
+        assert step.proc is None and not step.results
+        assert "Klik" in step.summary.get()
+        step.run_btn.invoke()
         deadline = time.time() + 300
         while (step.proc is None and not step.results) or step.proc is not None:
             w.update()
