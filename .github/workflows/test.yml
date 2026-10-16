@@ -1,16 +1,16 @@
 name: Test
 
+# Dimatikan sementara: .github/actions/setup-python-with-uv (dari upstream) tidak ada
+# di repo ini, jadi job selalu gagal. Masih bisa dijalankan manual dari tab Actions.
 on:
-  push:
-    branches: [master]
-    paths:
-      - "src/**/*.py"
-      - "tests/**/*.py"
-  pull_request:
-    branches: [master]
-    # paths:
-    #   - "src/**/*.py"
-    #   - "tests/**/*.py"
+  workflow_dispatch:
+  # push:
+  #   branches: [master]
+  #   paths:
+  #     - "src/**/*.py"
+  #     - "tests/**/*.py"
+  # pull_request:
+  #   branches: [master]
 
 jobs:
   test-and-coverage:
