@@ -45,6 +45,7 @@ CALLOUTS = {  # each marker sits on the top-left corner of what it points at
     "08_proses": [(285, 183), (868, 199), (1090, 108), (264, 716)],
     "09_koreksi": [(14, 40), (14, 106), (10, 637), (847, 637)],
     "10_rekap": [(264, 118), (293, 165), (279, 682), (1037, 682)],
+    "11_tutup": [(484, 343), (562, 343), (736, 343)],
 }
 PAD_LEFT = {"05_scan_dialog": 44}  # white margin added on the left for the markers
 
@@ -382,7 +383,8 @@ def main(shots, out_pdf):
                         "<b>Analisis butir soal</b>: persentase benar tiap soal dan sebaran jawaban A–E. Kategori: "
                         "<b>Mudah</b> (lebih dari 70% benar), <b>Sedang</b> (30–70%), <b>Sukar</b> (kurang dari 30%).",
                         "<b>Ekspor ke Excel...</b> menyimpan rekap lengkap. <b>Buka folder hasil</b> membuka folder "
-                        "berisi gambar LJK bertanda.",
+                        "berisi gambar LJK bertanda. Di sebelahnya tertulis status ekspor: <i>Belum diekspor</i>, "
+                        "<i>Sudah diekspor</i>, atau <i>Ada perubahan sejak ekspor terakhir</i> (mis. setelah koreksi).",
                         "<b>Ujian baru (template sama)</b>: mulai ujian berikutnya. Kunci, folder, dan koreksi "
                         "dikosongkan; template tetap."]),
               p("Isi file Excel", "h2"),
@@ -392,7 +394,19 @@ def main(shots, out_pdf):
                      ["Analisis Butir", "Tingkat kesukaran dan sebaran jawaban tiap soal"],
                      ["Tidak Ikut Ujian", "Siswa di daftar siswa yang tidak punya LJK (bila daftar siswa dipakai)"]],
                     [38 * mm, W - 38 * mm]),  # fmt: skip
-              Spacer(1, 6), p("Klik <b>Selesai</b> untuk menutup program. Semua pengaturan tersimpan otomatis."),
+              PageBreak(),
+              p("Selesai dan menutup program", "h2"),
+              p("Klik <b>Selesai</b> di kanan bawah. Bila rekap <b>belum diekspor</b>, atau ada perubahan sejak "
+                "ekspor terakhir, program bertanya dulu. Pertanyaan yang sama muncul bila jendela ditutup dengan "
+                "tombol X."),
+              shot("11_tutup"),
+              numbered(["<b>Batal</b>: kembali ke program.",
+                        "<b>Tutup tanpa ekspor</b>: hasil pemeriksaan tetap tersimpan di folder hasil, jadi rekap bisa "
+                        "diekspor lain kali.",
+                        "<b>Ekspor ke Excel...</b>: simpan rekap, lalu program ditutup."]),
+              p("Bila rekap sudah diekspor, tombol <b>Selesai</b> membuka layar <b>Pemeriksaan selesai</b> dengan "
+                "pilihan <b>Buka rekap Excel</b>, <b>Buka folder hasil</b>, <b>Ujian baru</b>, atau "
+                "<b>Tutup aplikasi</b>. Semua pengaturan (template, kunci, folder) tersimpan otomatis."),
               PageBreak()]
 
     # ---- troubleshooting

@@ -147,6 +147,16 @@ def main():
     pump()
     w.next()
     shot("10_rekap")
+
+    # closing without an export: the question shown before the window closes
+    def ask(master, heading, text, buttons, detail=""):
+        d = wz.ChoiceDialog(master, heading, text, buttons, detail)
+        shot("11_tutup")
+        d.destroy()
+        return "batal"
+
+    wz.ChoiceDialog.ask = staticmethod(ask)
+    w.on_close()
     w.destroy()
 
 

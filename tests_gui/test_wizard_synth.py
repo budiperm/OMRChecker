@@ -103,3 +103,126 @@ def test_process_step_waits_for_click(setup, monkeypatch):
             w.destroy()
         except tk.TclError:
             pass
+
+
+def alive(w):
+    try:
+        return bool(w.winfo_exists())
+    except tk.TclError:  # the root window itself was destroyed
+        return False
+
+
+def run_to_results(w):
+    """Steps 1-5 with all-A keys; returns once step 5 has read every sheet."""
+    pump(w)
+    w.next()
+    step = w.steps[1]
+    for part, text in step.texts.items():
+        text.insert("1.0", "A" * len(w.template.sections[part]))
+        step.on_key_edit(part)
+    w.next()
+    w.next()
+    w.next()
+    step = w.steps[4]
+    step.run_btn.invoke()
+    deadline = time.time() + 300
+    while step.proc is not None:
+        w.update()
+        time.sleep(0.05)
+        assert time.time() < deadline
+    pump(w, 20)
+    return step
+
+
+def test_close_offers_export_until_rekap_is_current(setup, monkeypatch):
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)  # confirm "Ujian baru"
+    asked = []
+    answers = []
+
+    def ask(master, heading, text, buttons, detail=""):
+        asked.append((heading, [k for k, *_ in buttons]))
+        return answers.pop(0)
+
+    monkeypatch.setattr(wz.ChoiceDialog, "ask", staticmethod(ask))
+    out = tmp / "rekap.xlsx"
+    monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(out))
+    exam = ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil"))
+    exam.save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        run_to_results(w)
+        assert w.export_pending()
+
+        # X button: nothing exported yet -> asked; "Batal" keeps the window
+        answers.append("batal")
+        w.on_close()
+        assert asked[-1] == ("Rekap nilai belum diekspor", ["batal", "tutup", "ekspor"])
+        assert alive(w)
+
+        # step 6, "Selesai": export from the prompt, then the app closes
+        w.next()
+        assert w.current == 5
+        assert w.steps[5].export_info.get() == "Belum diekspor"
+        answers.append("ekspor")
+        w.next()  # Selesai
+        assert out.exists()
+        assert not alive(w)
+        saved = ujian.Exam.load(tmp / "sesi.json")
+        assert saved.exported_file == str(out) and saved.exported_state == ujian.rekap_state(saved)
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+
+    # reopen: rekap is current -> "Selesai" shows the closing screen, no export prompt
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        for _ in range(5):
+            w.next()
+        assert w.current == 5 and not w.export_pending()
+        assert w.steps[5].export_info.get() == "✓ Sudah diekspor: rekap.xlsx"
+        answers.append("folder")
+        opened = []
+        monkeypatch.setattr(wz, "open_path", opened.append)
+        w.next()
+        assert asked[-1] == ("Pemeriksaan selesai", ["buka", "folder", "baru", "tutup"])
+        assert opened == [w.exam.output_dir] and alive(w)
+
+        # a correction after the export makes the rekap out of date again
+        w.exam.corrections = {"siswa_1.jpg": {"q1": "B"}}
+        assert w.export_pending()
+        answers.append("tutup")
+        w.on_close()
+        assert asked[-1][0] == "Rekap belum diperbarui"
+        assert not alive(w)
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+
+
+def test_choice_dialog_returns_clicked_key(setup):
+    import wizard as wz
+
+    lib, _, tmp = setup
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        d = wz.ChoiceDialog(w, "Judul", "Teks", [("a", "Satu", False), ("b", "Dua", True)], detail="rincian")
+        pump(w)
+        assert str(d.buttons["b"]["style"]) == "Accent.TButton"
+        d.buttons["b"].invoke()
+        assert d.choice == "b" and not d.winfo_exists()
+        d = wz.ChoiceDialog(w, "Judul", "Teks", [("a", "Satu", False)])
+        d.event_generate("<Escape>")
+        pump(w)
+        assert d.choice is None
+    finally:
+        w.destroy()

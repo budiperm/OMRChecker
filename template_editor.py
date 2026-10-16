@@ -25,6 +25,7 @@ import cv2
 import numpy as np
 
 import template_builder as tb
+import theme
 
 KIND_LABELS = {
     tb.KIND_MCQ: "Soal pilihan ganda",
@@ -106,7 +107,7 @@ class TemplateEditor(tk.Toplevel):
             side="left"
         )
         ttk.Button(top, text="Pas layar", style="Small.TButton", command=self.fit_zoom).pack(side="left", padx=4)
-        ttk.Label(top, textvariable=self.status_var, style="Muted.TLabel").pack(
+        ttk.Label(top, textvariable=self.status_var, foreground=theme.MUTED).pack(
             side="left", padx=12
         )
 
@@ -159,7 +160,7 @@ class TemplateEditor(tk.Toplevel):
         ttk.Label(
             lst,
             text="Tarik kotak di gambar untuk membuat blok baru.",
-            style="Muted.TLabel",
+            foreground=theme.MUTED,
         ).pack(anchor="w", padx=4, pady=(0, 4))
 
         prop = ttk.LabelFrame(side, text="Isi blok terpilih")
@@ -199,13 +200,13 @@ class TemplateEditor(tk.Toplevel):
             text="Blok dengan nama kolom sama digabung berurutan\n"
             "(mis. TGL, BLN, THN → TglLahir). Nomor soal mulai\n"
             "dari 1 lagi di setiap bagian (I, II, Motivasi, ...).",
-            style="Muted.TLabel",
+            foreground=theme.MUTED,
         ).grid(row=8, column=0, columnspan=2, sticky="w", **pad)
 
         key = ttk.LabelFrame(side, text="3. Kunci jawaban (opsional)")
         self.key_text = tk.Text(key, height=3, width=36, wrap="word", font="TkFixedFont")
         self.key_text.pack(fill="x", padx=4, pady=4)
-        ttk.Label(key, text="Contoh: ABCDE ABCDE ... atau 1A 2B 3C", style="Muted.TLabel").pack(
+        ttk.Label(key, text="Contoh: ABCDE ABCDE ... atau 1A 2B 3C", foreground=theme.MUTED).pack(
             anchor="w", padx=4
         )
         sc = ttk.Frame(key)

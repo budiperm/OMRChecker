@@ -78,7 +78,7 @@ class ImagePreview(ttk.Frame):
         self.open_btn = ttk.Button(bar, text="Buka di aplikasi", style="Small.TButton", command=self.open_external)
         self.open_btn.pack(side="left")
         self.caption = tk.StringVar(value=title)
-        ttk.Label(self, textvariable=self.caption, style="Muted.TLabel").pack(anchor="w")
+        ttk.Label(self, textvariable=self.caption, foreground=theme.MUTED).pack(anchor="w")
         frame = ttk.Frame(self)
         frame.pack(fill="both", expand=True)
         self.canvas = tk.Canvas(frame, background="#e4e8ee", highlightthickness=0)
@@ -377,7 +377,7 @@ class KeyStep(Step):
             if part and ujian.can_edit(template.path):
                 ttk.Button(head, text="Ganti nama...", command=lambda p=part: self.rename(p)).pack(side="left", padx=8)
             counter = tk.StringVar()
-            ttk.Label(head, textvariable=counter, style="Muted.TLabel").pack(side="right")
+            ttk.Label(head, textvariable=counter, foreground=theme.MUTED).pack(side="right")
             text = tk.Text(row, height=2, width=60, wrap="char", font=theme.mono(self, 11))
             text.grid(row=1, column=1, sticky="ew")
             text.bind("<KeyRelease>", lambda e, p=part: self.on_key_edit(p))
@@ -387,7 +387,7 @@ class KeyStep(Step):
             wrow.grid(row=2, column=1, sticky="ew", pady=(2, 0))
             ttk.Label(wrow, text="Bobot benar (opsional):").pack(side="left")
             ttk.Entry(wrow, textvariable=weight, width=30).pack(side="left", padx=4)
-            ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", style="Muted.TLabel").pack(side="left")
+            ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", foreground=theme.MUTED).pack(side="left")
             row.columnconfigure(1, weight=1)
             self.texts[part], self.counters[part], self.weights[part] = text, counter, weight
         self.keys_frame.columnconfigure(0, weight=1)
@@ -591,7 +591,7 @@ class ScansStep(Step):
             box.pack(side="left", padx=(0, 12))
             self.col_vars[key], self.col_boxes[key] = var, box
         self.student_info = tk.StringVar()
-        ttk.Label(s, textvariable=self.student_info, style="Muted.TLabel").pack(anchor="w", padx=6, pady=(0, 6))
+        ttk.Label(s, textvariable=self.student_info, foreground=theme.MUTED).pack(anchor="w", padx=6, pady=(0, 6))
         self.students.trace_add("write", lambda *a: self.read_students())
 
     def enter(self):
@@ -702,7 +702,7 @@ class OutputStep(Step):
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
         self.existing = tk.StringVar()
-        ttk.Label(f, textvariable=self.existing, style="Warn.TLabel").pack(anchor="w", padx=6)
+        ttk.Label(f, textvariable=self.existing, foreground=theme.WARN).pack(anchor="w", padx=6)
         self.policy = tk.StringVar(value="replace")
         self.replace_rb = ttk.Radiobutton(f, text="Hapus hasil lama lalu proses ulang", variable=self.policy, value="replace")
         self.new_rb = ttk.Radiobutton(f, text="Simpan di subfolder baru (tanggal & jam)", variable=self.policy, value="new")
@@ -1044,7 +1044,7 @@ class CorrectionDialog(tk.Toplevel):
         ttk.Button(bar, text="Batal", command=self.destroy).pack(side="right", padx=4)
         ttk.Button(bar, text="Kembalikan ke hasil scan", command=self.revert).pack(side="left")
         ttk.Label(self, text="Ubah yang salah baca. '-' = kosong, (AC) = lebih dari satu tanda.",
-                  style="Muted.TLabel").pack(anchor="w", padx=8, pady=6)  # fmt: skip
+                  foreground=theme.MUTED).pack(anchor="w", padx=8, pady=6)  # fmt: skip
         ident = ttk.LabelFrame(self, text="Identitas")
         ident.pack(fill="x", padx=8)
         self.fields = {}
@@ -1123,7 +1123,21 @@ class ExportStep(Step):
         bar.pack(fill="x", pady=8)
         ttk.Button(bar, text="Ekspor ke Excel...", command=self.export, style="Accent.TButton").pack(side="left")
         ttk.Button(bar, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="left", padx=6)
+        self.export_info = tk.StringVar()
+        self.export_label = ttk.Label(bar, textvariable=self.export_info, foreground=theme.MUTED)
+        self.export_label.pack(side="left", padx=8)
         ttk.Button(bar, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
+
+    def show_export_status(self):
+        if not self.wizard.export_pending():
+            self.export_info.set(f"✓ Sudah diekspor: {Path(self.exam.exported_file).name}" if self.exam.exported_file else "")
+            self.export_label.configure(foreground=theme.DONE)
+        elif self.exam.exported_file:
+            self.export_info.set("Ada perubahan sejak ekspor terakhir: ekspor ulang")
+            self.export_label.configure(foreground=theme.WARN)
+        else:
+            self.export_info.set("Belum diekspor")
+            self.export_label.configure(foreground=theme.WARN)
 
     def enter(self):
         results = self.wizard.compute_results()
@@ -1139,26 +1153,33 @@ class ExportStep(Step):
         for a in ujian.item_analysis(results, self.exam, self.wizard.template.sections):
             self.tree.insert("", "end", values=(a["soal"], a["kunci"], f"{a['bobot']:g}", a["benar"], a["kategori"],
                                                 *[a[o] for o in ujian.OPTIONS_ORDER], a["Kosong"], a["Ganda"]))  # fmt: skip
+        self.show_export_status()
 
-    def export(self):
+    def export(self, ask_open=True):
+        """Save the Excel rekap; True when written."""
         name = ujian.safe_name(f"Rekap {self.exam.name or 'Ujian'}")
+        last = Path(self.exam.exported_file) if self.exam.exported_file else None
         path = filedialog.asksaveasfilename(
             parent=self, title="Simpan rekap", defaultextension=".xlsx",
-            initialdir=self.exam.output_dir, initialfile=f"{name}.xlsx", filetypes=[("Excel", "*.xlsx")],
+            initialdir=str(last.parent) if last and last.parent.is_dir() else self.exam.output_dir,
+            initialfile=last.name if last else f"{name}.xlsx", filetypes=[("Excel", "*.xlsx")],
         )  # fmt: skip
         if not path:
-            return
+            return False
+        results = self.wizard.compute_results()  # fresh: corrections made in step 5 count
         try:
-            ujian.export_excel(path, self.results, self.exam, self.wizard.template.sections,
+            ujian.export_excel(path, results, self.exam, self.wizard.template.sections,
                                self.wizard.students, self.exam.name)  # fmt: skip
         except PermissionError:
             messagebox.showerror(APP_TITLE, "File sedang dibuka di Excel. Tutup dulu lalu coba lagi.", parent=self)
-            return
-        if messagebox.askyesno(APP_TITLE, "Rekap tersimpan. Buka sekarang?", parent=self):
-            try:
-                open_path(path)
-            except OSError as e:
-                messagebox.showerror(APP_TITLE, str(e), parent=self)
+            return False
+        self.exam.exported_file = str(Path(path))
+        self.exam.exported_state = ujian.rekap_state(self.exam)
+        self.exam.save(self.wizard.settings)
+        self.show_export_status()
+        if ask_open and messagebox.askyesno(APP_TITLE, "Rekap tersimpan. Buka sekarang?", parent=self):
+            open_file(path, self)
+        return True
 
     def new_exam(self):
         if not messagebox.askyesno(APP_TITLE, "Mulai ujian baru dengan template yang sama?\n(Kunci, folder, dan koreksi dikosongkan.)", parent=self):
@@ -1167,8 +1188,62 @@ class ExportStep(Step):
         self.wizard.exam = ujian.Exam(template=template)
         for step in self.wizard.steps:
             step.exam = self.wizard.exam
-        self.wizard.exam.save()
+        self.wizard.exam.save(self.wizard.settings)
         self.wizard.go(1)
+
+
+def open_file(path, parent):
+    try:
+        open_path(path)
+    except OSError as e:
+        messagebox.showerror(APP_TITLE, str(e), parent=parent)
+
+
+class ChoiceDialog(tk.Toplevel):
+    """Modal question: heading, text, an optional muted detail line and a row
+    of buttons. ask() returns the key of the clicked button (None = closed)."""
+
+    def __init__(self, master, heading, text, buttons, detail=""):
+        super().__init__(master)
+        self.title(APP_TITLE)
+        self.transient(master.winfo_toplevel())
+        self.resizable(False, False)
+        self.choice = None
+        f = ttk.Frame(self, padding=(28, 24, 28, 20))
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text=heading, style="Subtitle.TLabel").pack(anchor="w")
+        ttk.Label(f, text=text, wraplength=520, justify="left").pack(anchor="w", pady=(8, 0))
+        if detail:
+            ttk.Label(f, text=detail, foreground=theme.MUTED, wraplength=520, justify="left").pack(anchor="w", pady=(6, 0))
+        bar = ttk.Frame(f)
+        bar.pack(fill="x", pady=(22, 0))
+        self.buttons = {}
+        for key, label, primary in reversed(buttons):  # right to left: the primary button ends up last
+            b = ttk.Button(bar, text=label, style="Accent.TButton" if primary else "TButton",
+                           command=lambda k=key: self.pick(k))  # fmt: skip
+            b.pack(side="right", padx=(8, 0))
+            self.buttons[key] = b
+            if primary:
+                b.focus_set()
+                self.bind("<Return>", lambda e, k=key: self.pick(k))
+        self.bind("<Escape>", lambda e: self.pick(None))
+        self.protocol("WM_DELETE_WINDOW", lambda: self.pick(None))
+        self.update_idletasks()
+        top = master.winfo_toplevel()
+        x = top.winfo_rootx() + (top.winfo_width() - self.winfo_reqwidth()) // 2
+        y = top.winfo_rooty() + (top.winfo_height() - self.winfo_reqheight()) // 3
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+        self.grab_set()
+
+    def pick(self, key):
+        self.choice = key
+        self.destroy()
+
+    @classmethod
+    def ask(cls, master, heading, text, buttons, detail=""):
+        dialog = cls(master, heading, text, buttons, detail)
+        master.wait_window(dialog)
+        return dialog.choice
 
 
 # ---------------------------------------------------------------------------
@@ -1222,9 +1297,9 @@ class Wizard(tk.Tk):
         self.eyebrow = tk.StringVar()
         self.heading = tk.StringVar()
         self.hint = tk.StringVar()
-        ttk.Label(main, textvariable=self.eyebrow, style="Eyebrow.TLabel").pack(anchor="w", padx=28, pady=(22, 0))
+        ttk.Label(main, textvariable=self.eyebrow, style="Eyebrow.TLabel", foreground=theme.ACCENT).pack(anchor="w", padx=28, pady=(22, 0))
         ttk.Label(main, textvariable=self.heading, style="Title.TLabel").pack(anchor="w", padx=28)
-        ttk.Label(main, textvariable=self.hint, style="Muted.TLabel").pack(anchor="w", padx=28, pady=(2, 0))
+        ttk.Label(main, textvariable=self.hint, foreground=theme.MUTED).pack(anchor="w", padx=28, pady=(2, 0))
 
         foot = ttk.Frame(main, style="Footer.TFrame")
         foot.pack(side="bottom", fill="x")
@@ -1267,7 +1342,7 @@ class Wizard(tk.Tk):
             return
         self.exam.save(self.settings)
         if self.current == len(STEPS) - 1:
-            self.on_close()
+            self.finish()
             return
         self.go(self.current + 1)
 
@@ -1316,9 +1391,66 @@ class Wizard(tk.Tk):
             cmd = [sys.executable, str(Path(gui.__file__).resolve()), "--lanjutan"]
         subprocess.Popen(cmd)
 
-    def on_close(self):
-        if self.busy and not messagebox.askyesno(APP_TITLE, "Proses masih berjalan. Hentikan dan keluar?"):
+    # closing
+    def export_pending(self):
+        """True when there are results whose current rekap was never exported."""
+        if self.template is None:
+            return False
+        state = ujian.rekap_state(self.exam)
+        return bool(state) and state != self.exam.exported_state
+
+    def ask_export_before_close(self):
+        """Offer the export when the rekap is missing or out of date. True = go on closing."""
+        if not self.export_pending():
+            return True
+        rows, errors = ujian.read_results(self.exam.output_dir)
+        if self.exam.exported_file:
+            heading = "Rekap belum diperbarui"
+            text = ("Ada perubahan sejak ekspor terakhir (koreksi, kunci jawaban, atau proses ulang). "
+                    "Ekspor ulang rekap sebelum menutup?")  # fmt: skip
+            detail = f"Ekspor terakhir: {self.exam.exported_file}"
+        else:
+            heading = "Rekap nilai belum diekspor"
+            text = f"Hasil pemeriksaan {len(rows) + len(errors)} LJK belum disimpan ke Excel. Ekspor sekarang sebelum menutup?"
+            detail = "Hasil tetap tersimpan di folder hasil dan bisa diekspor lain kali."
+        choice = ChoiceDialog.ask(self, heading, text, [("batal", "Batal", False), ("tutup", "Tutup tanpa ekspor", False),
+                                                        ("ekspor", "Ekspor ke Excel...", True)], detail)  # fmt: skip
+        if choice == "ekspor":
+            return self.steps[5].export(ask_open=False)
+        return choice == "tutup"
+
+    def finish(self):
+        """'Selesai' on the last step: export first if needed, then a closing screen."""
+        if self.export_pending():
+            if self.ask_export_before_close():
+                self.close()
             return
+        path = self.exam.exported_file
+        buttons = [("folder", "Buka folder hasil", False), ("baru", "Ujian baru", False), ("tutup", "Tutup aplikasi", True)]
+        if path and Path(path).exists():
+            buttons.insert(0, ("buka", "Buka rekap Excel", False))
+        name = f" {self.exam.name}" if self.exam.name else ""
+        choice = ChoiceDialog.ask(self, "Pemeriksaan selesai", f"Rekap nilai{name} sudah tersimpan.", buttons,
+                                  detail=path or self.exam.output_dir)  # fmt: skip
+        if choice == "buka":
+            open_file(path, self)
+        elif choice == "folder":
+            open_file(self.exam.output_dir, self)
+        elif choice == "baru":
+            self.steps[5].new_exam()
+        elif choice == "tutup":
+            self.close()
+
+    def on_close(self):
+        """The window's X button."""
+        if self.busy:
+            if not messagebox.askyesno(APP_TITLE, "Proses masih berjalan. Hentikan dan keluar?", parent=self):
+                return
+        elif not self.ask_export_before_close():
+            return
+        self.close()
+
+    def close(self):
         proc = getattr(self.steps[4], "proc", None)
         if proc is not None and proc.is_alive():
             proc.terminate()

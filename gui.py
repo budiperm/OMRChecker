@@ -210,6 +210,8 @@ def run_gui(mainloop=True):
     from tkinter import filedialog, messagebox, ttk
     from tkinter.scrolledtext import ScrolledText
 
+    import theme
+
     if sys.platform.startswith("win"):
         try:
             import ctypes
@@ -221,8 +223,6 @@ def run_gui(mainloop=True):
     class App(tk.Tk):
         def __init__(self):
             super().__init__()
-            import theme
-
             theme.apply(self)
             self.title(APP_TITLE)
             self.geometry("1100x720")
@@ -395,7 +395,7 @@ def run_gui(mainloop=True):
             ttk.Button(pbar, text="Pas lebar", command=lambda: self.zoom_preview(None)).pack(side="left", padx=4)
             ttk.Button(pbar, text="Buka di aplikasi", command=self.open_selected_image).pack(side="left")
             self.preview_name = tk.StringVar(value="Pilih baris untuk melihat LJK-nya.")
-            ttk.Label(prev, textvariable=self.preview_name, style="Muted.TLabel").pack(anchor="w", padx=2)
+            ttk.Label(prev, textvariable=self.preview_name, foreground=theme.MUTED).pack(anchor="w", padx=2)
             pcv = ttk.Frame(prev)
             pcv.pack(fill="both", expand=True)
             self.preview = tk.Canvas(pcv, background="#e4e8ee", highlightthickness=0)
@@ -417,7 +417,7 @@ def run_gui(mainloop=True):
             ttk.Label(
                 res,
                 text="Pilih baris (klik atau tombol panah) untuk melihat LJK yang sudah ditandai di kanan.",
-                style="Muted.TLabel",
+                foreground=theme.MUTED,
             ).pack(anchor="w", padx=4, pady=2)
 
             # Log tab

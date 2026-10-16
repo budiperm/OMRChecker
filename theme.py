@@ -120,12 +120,12 @@ def apply(root):
     s.configure(".", font="TkDefaultFont")
     s.configure("TFrame", background=BG)
     s.configure("TLabel", background=BG)
-    s.configure("Muted.TLabel", foreground=MUTED)
-    s.configure("Warn.TLabel", foreground=WARN)
+    # label colours (MUTED, WARN, ...) go on the widget itself (foreground=...):
+    # sv-ttk can drop foreground set on derived label styles
     s.configure("Strong.TLabel", font="SunValleyBodyStrongFont")
     s.configure("Title.TLabel", font="SunValleyTitleFont", foreground=FG)
     s.configure("Subtitle.TLabel", font="SunValleySubtitleFont", foreground=FG)
-    s.configure("Eyebrow.TLabel", font="SunValleyCaptionFont", foreground=ACCENT)
+    s.configure("Eyebrow.TLabel", font="SunValleyCaptionFont")
     s.configure("Big.TLabel", font="SunValleyBodyLargeFont")
     s.configure("TButton", padding=(14, 5))
     s.configure("Accent.TButton", padding=(18, 5))
