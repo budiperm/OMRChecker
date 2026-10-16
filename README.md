@@ -384,9 +384,14 @@ Here's a snapshot of the [Android OMR Helper App (archived)](https://github.com/
 
 ### License
 
-[![GitHub license](https://img.shields.io/github/license/Udayraj123/OMRChecker.svg)](https://github.com/Udayraj123/OMRChecker/blob/master/LICENSE)
+This fork (OMRChecker - Pemindai LJK, Windows app) is released under the
+[GNU AGPL-3.0](LICENSE): free to use, share and modify; anyone who distributes
+it must pass on the source under the same license. Paid services around it
+(installation, setup, training, bundling with scanners) are allowed.
 
-For more details see [LICENSE](https://github.com/Udayraj123/OMRChecker/blob/master/LICENSE).
+It is based on [OMRChecker](https://github.com/Udayraj123/OMRChecker) by
+Udayraj Deshmukh and contributors, published under the MIT license
+(see [LICENSE-OMRChecker-asli-MIT.txt](LICENSE-OMRChecker-asli-MIT.txt)).
 
 ### Donate
 

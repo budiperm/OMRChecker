@@ -13,8 +13,7 @@
 #ifndef NoticesFile
   #define NoticesFile "..\PEMBERITAHUAN-PIHAK-KETIGA.txt"
 #endif
-; TODO: replace with the publisher/company name used in EULA.txt
-#define AppPublisher "OMRChecker"
+#define AppPublisher "Budi Permadi"
 #define AppName "OMRChecker - Pemindai LJK"
 #define AppExe "OMRChecker.exe"
 
@@ -40,7 +39,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
-LicenseFile=EULA.txt
+LicenseFile=LISENSI.txt
 SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
@@ -65,7 +64,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Source: "..\samples\*"; DestDir: "{app}\samples"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\PANDUAN.pdf"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\PERSYARATAN.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "EULA.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "LISENSI.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#NoticesFile}"; DestDir: "{app}"; DestName: "PEMBERITAHUAN-PIHAK-KETIGA.txt"; Flags: ignoreversion
 
 [Icons]

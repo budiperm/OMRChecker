@@ -125,7 +125,7 @@ jobs:
           "OMRChecker - Pemindai LJK memakai komponen sumber terbuka berikut." | Set-Content $f -Encoding utf8
           "Setiap komponen tunduk pada lisensinya sendiri.`r`n" | Add-Content $f -Encoding utf8
           "==== OMRChecker (proyek asal) ====" | Add-Content $f -Encoding utf8
-          Get-Content LICENSE | Add-Content $f -Encoding utf8
+          Get-Content LICENSE-OMRChecker-asli-MIT.txt | Add-Content $f -Encoding utf8
           "`r`n==== Python ====`r`nPython Software Foundation License: https://docs.python.org/3/license.html`r`n" | Add-Content $f -Encoding utf8
           pip-licenses --from=mixed --with-license-file --no-license-path --format=plain-vertical `
             --ignore-packages pip-licenses prettytable wcwidth pip setuptools wheel --output-file lisensi.txt
@@ -159,7 +159,7 @@ jobs:
           $p = Start-Process $setup -Wait -PassThru `
                  -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER", "/DIR=`"$dir`"", "/LOG=`"$env:RUNNER_TEMP\setup.log`""
           if ($p.ExitCode) { Get-Content "$env:RUNNER_TEMP\setup.log"; Write-Error "Instalasi gagal ($($p.ExitCode))"; exit 1 }
-          foreach ($f in "OMRChecker.exe", "PANDUAN.pdf", "EULA.txt", "PEMBERITAHUAN-PIHAK-KETIGA.txt", "samples", "unins000.exe", "_internal\TWAINDSM.dll") {
+          foreach ($f in "OMRChecker.exe", "PANDUAN.pdf", "LISENSI.txt", "PEMBERITAHUAN-PIHAK-KETIGA.txt", "samples", "unins000.exe", "_internal\TWAINDSM.dll") {
             if (-not (Test-Path "$dir\$f")) { Write-Error "Tidak terpasang: $f"; exit 1 }
           }
           # Run the installed (windowed) program in batch mode on a bundled sample:
