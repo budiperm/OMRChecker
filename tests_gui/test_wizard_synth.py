@@ -179,7 +179,9 @@ def test_close_offers_export_until_rekap_is_current(setup, monkeypatch):
         except tk.TclError:
             pass
 
-    # reopen: rekap is current -> "Selesai" shows the closing screen, no export prompt
+    # reopen with both folders remembered: rekap is current -> "Selesai" shows
+    # the closing screen, no export prompt
+    ujian.save_prefs({ujian.PREF_SCANS: True, ujian.PREF_OUTPUT: True}, tmp / "sesi.json")
     w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
     try:
         pump(w)
@@ -446,3 +448,65 @@ def test_full_rerun_keeps_exam_file(setup, monkeypatch):
             w.destroy()
         except tk.TclError:
             pass
+
+
+def test_remember_folder_checkboxes(setup, monkeypatch):
+    """Steps 3 and 4: 'Ingat folder ini' is off by default; after a finished
+    (exported) exam or 'Ujian baru' only the checked folders are kept."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)
+    hasil = tmp / "hasil"
+    done = ujian.Exam(scans_dir=str(scans), output_dir=str(hasil), exported_file=str(tmp / "rekap.xlsx"),
+                      corrections={"siswa_1.jpg": {"q1": "B"}})  # fmt: skip
+    done.save(tmp / "sesi.json")
+
+    # default: nothing remembered, the next exam starts with empty folders
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        assert not w.steps[2].remember.var.get() and not w.steps[3].remember.var.get()
+        assert w.exam.scans_dir == "" and w.exam.output_dir == "" and w.exam.corrections == {}
+        w.next()
+        w.next()
+        assert w.current == 2 and w.steps[2].folder.get() == ""
+        # check "remember" in step 3: saved right away as a preference
+        w.steps[2].remember.invoke()
+        assert ujian.load_prefs(tmp / "sesi.json") == {ujian.PREF_SCANS: True, ujian.PREF_OUTPUT: False}
+        w.steps[2].folder.set(str(scans))
+        w.next()
+        assert w.current == 3 and w.steps[3].folder.get().endswith("scan_hasil")
+
+        # "Ujian baru": the remembered scan folder stays, the output folder is cleared
+        w.exam.output_dir = str(hasil)
+        w.steps[5].new_exam()
+        assert w.exam.scans_dir == str(scans) and w.exam.output_dir == ""
+    finally:
+        w.destroy()
+
+    # both remembered: a finished exam keeps its folders on the next start
+    ujian.save_prefs({ujian.PREF_SCANS: True, ujian.PREF_OUTPUT: True}, tmp / "sesi.json")
+    done.save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        assert w.steps[2].remember.var.get() and w.steps[3].remember.var.get()
+        assert w.exam.scans_dir == str(scans) and w.exam.output_dir == str(hasil)
+    finally:
+        w.destroy()
+
+
+def test_unfinished_exam_keeps_folders(setup):
+    """An exam not exported yet (e.g. processing stopped halfway) is resumed
+    with its folders, whatever the checkboxes say."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil")).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        assert w.exam.scans_dir == str(scans) and w.exam.output_dir == str(tmp / "hasil")
+    finally:
+        w.destroy()
