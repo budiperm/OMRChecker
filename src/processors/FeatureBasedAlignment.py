@@ -5,6 +5,7 @@ Credits: https://www.learnopencv.com/image-alignment-feature-based-using-opencv-
 import cv2
 import numpy as np
 
+from src.logger import logger
 from src.processors.interfaces.ImagePreprocessor import ImagePreprocessor
 from src.utils.image import ImageUtils
 from src.utils.interaction import InteractionUtils
@@ -12,6 +13,9 @@ from src.constants.image_processing import (
     DEFAULT_MAX_FEATURES,
     DEFAULT_GOOD_MATCH_PERCENT
 )
+
+# fewer matched features than this: no trustworthy transform (blank page, wrong form)
+MIN_MATCHES = 10
 
 
 class FeatureBasedAlignment(ImagePreprocessor):
@@ -55,6 +59,10 @@ class FeatureBasedAlignment(ImagePreprocessor):
 
         # Detect ORB features and compute descriptors.
         from_keypoints, from_descriptors = self.orb.detectAndCompute(image, None)
+        if from_descriptors is None or len(from_keypoints) < MIN_MATCHES:
+            # blank or unrelated page: mark this sheet as an error, keep the batch going
+            logger.warning(f"Too few features to align {_file_path}")
+            return None
 
         # Match features.
         matcher = cv2.DescriptorMatcher_create(
@@ -90,10 +98,13 @@ class FeatureBasedAlignment(ImagePreprocessor):
 
         # Find homography
         height, width = self.ref_img.shape
+        if len(matches) < MIN_MATCHES:
+            logger.warning(f"Too few matches to align {_file_path}")
+            return None
         if self.transform_2_d:
             m, _inliers = cv2.estimateAffine2D(points1, points2)
-            return cv2.warpAffine(image, m, (width, height))
+            return None if m is None else cv2.warpAffine(image, m, (width, height))
 
         # Use homography
         h, _mask = cv2.findHomography(points1, points2, cv2.RANSAC)
-        return cv2.warpPerspective(image, h, (width, height))
+        return None if h is None else cv2.warpPerspective(image, h, (width, height))

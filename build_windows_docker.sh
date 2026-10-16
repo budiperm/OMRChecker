@@ -8,7 +8,8 @@ TWAINDSM=""
 docker run --rm -v "$PWD":/src -w /src -e TWAINDSM="$TWAINDSM" tobix/pywine:3.12 bash -c '
   set -e
   OPTS="--noupx --paths . --collect-submodules src --hidden-import openpyxl --hidden-import win32com.client
-    --hidden-import pythoncom --hidden-import pywintypes --collect-data sv_ttk $TWAINDSM"
+    --hidden-import pythoncom --hidden-import pywintypes --collect-data sv_ttk --icon assets/icon.ico
+    --add-data assets/icon.ico;assets --add-data assets/icon.png;assets --add-data assets/logo.png;assets $TWAINDSM"
   wine python -m pip install -q -r requirements.gui.txt -c requirements.wine-pins.txt
   wine pyinstaller --noconfirm --clean --onefile --windowed --name OMRChecker \
     --distpath dist --workpath build $OPTS gui.py
@@ -18,5 +19,5 @@ docker run --rm -v "$PWD":/src -w /src -e TWAINDSM="$TWAINDSM" tobix/pywine:3.12
   chown -R '"$(id -u):$(id -g)"' dist build OMRChecker.spec OMRChecker-debug.spec
 '
 rm -rf dist/samples && cp -r samples dist/samples
-(cd dist && rm -f OMRChecker-windows.zip && cp ../PERSYARATAN.txt . && zip -qr OMRChecker-windows.zip OMRChecker.exe PERSYARATAN.txt samples)
+(cd dist && rm -f OMRChecker-windows.zip && cp ../PERSYARATAN.txt ../PANDUAN.pdf . && zip -qr OMRChecker-windows.zip OMRChecker.exe PERSYARATAN.txt PANDUAN.pdf samples)
 echo "Selesai: dist/OMRChecker.exe dan dist/OMRChecker-windows.zip"

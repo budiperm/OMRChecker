@@ -1,5 +1,6 @@
 """The wizard end to end on a synthetic LJK (no private sample sheets needed):
-step 5 must wait for the "Proses LJK" click, then read every sheet.
+step 5 must wait for the "Proses LJK" click, then read every sheet; an empty
+page is flagged without stopping the batch.
 
 Needs Tk and a display (skipped otherwise); headless Linux: xvfb-run.
 """
@@ -9,6 +10,7 @@ import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +48,8 @@ def setup(tmp_path, monkeypatch):
     for k in range(2):
         filled = synth.fill(img, layout, synth.random_responses(layout, seed=k), seed=k)
         cv2.imencode(".jpg", filled)[1].tofile(str(scans / f"siswa_{k + 1}.jpg"))
+    # an empty page (e.g. the back of a duplex scan) must not stop the batch
+    cv2.imencode(".jpg", np.full((3508, 2480, 3), 235, np.uint8))[1].tofile(str(scans / "kosong.jpg"))
     return lib, scans, tmp_path
 
 
@@ -79,7 +83,7 @@ def test_process_step_waits_for_click(setup, monkeypatch):
         time.sleep(0.5)
         pump(w, 10)
         assert step.proc is None and not step.results, "processing must not start by itself"
-        assert "Klik" in step.summary.get() and "2 LJK" in step.summary.get()
+        assert "Klik" in step.summary.get() and "3 LJK" in step.summary.get()
 
         step.run_btn.invoke()
         assert step.proc is not None
@@ -90,7 +94,10 @@ def test_process_step_waits_for_click(setup, monkeypatch):
             assert time.time() < deadline, "processing did not finish"
         pump(w, 20)
         assert not errors, errors
-        assert len(step.results) == 2
+        assert len(step.results) == 3
+        bad = [r for r in step.results if r.flags]
+        assert [r.file_id for r in bad] == ["kosong.jpg"]
+        assert "tidak terbaca" in bad[0].flags[0]
     finally:
         try:
             w.destroy()

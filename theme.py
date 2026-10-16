@@ -8,7 +8,9 @@
 
 """
 
+import sys
 import tkinter as tk
+from pathlib import Path
 from tkinter import font as tkfont
 from tkinter import ttk
 
@@ -27,6 +29,41 @@ DONE = "#1a7f37"
 TEXT_FAMILIES = ["Segoe UI Variable Text", "Segoe UI", "Inter", "Noto Sans", "DejaVu Sans"]
 DISPLAY_FAMILIES = ["Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", "Inter", "Noto Sans"]
 MONO_FAMILIES = ["Cascadia Mono", "Consolas", "DejaVu Sans Mono"]
+
+
+def asset(name):
+    """Path of a file in assets/, also inside the PyInstaller bundle."""
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base / "assets" / name
+
+
+def set_icon(root):
+    """App icon for the title bar, taskbar and Alt+Tab (all windows of root)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            # own taskbar group and icon instead of python.exe's
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("OMRChecker.PemindaiLJK")
+        except Exception:
+            pass
+        try:
+            root.iconbitmap(default=str(asset("icon.ico")))
+        except tk.TclError:
+            pass
+    try:
+        root._omr_icon = tk.PhotoImage(master=root, file=str(asset("icon.png")))
+        root.iconphoto(True, root._omr_icon)
+    except tk.TclError:
+        pass
+
+
+def logo(root):
+    """40 px logo for the sidebar, or None."""
+    try:
+        return tk.PhotoImage(master=root, file=str(asset("logo.png")))
+    except tk.TclError:
+        return None
 
 
 def _family(root, choices):
@@ -52,6 +89,7 @@ def apply(root):
     if getattr(root, "_omr_themed", False):
         return
     root._omr_themed = True
+    set_icon(root)
     text, display, mono_family = fonts(root)
     try:
         import sv_ttk

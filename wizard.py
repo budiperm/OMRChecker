@@ -1203,10 +1203,16 @@ class Wizard(tk.Tk):
         side = ttk.Frame(self, style="Side.TFrame", width=250)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
-        tk.Label(side, text="Pemindai LJK", bg=theme.SIDEBAR, fg=theme.FG, font="SunValleySubtitleFont").pack(
-            anchor="w", padx=22, pady=(24, 0))  # fmt: skip
-        tk.Label(side, text=f"OMRChecker v{VERSION}", bg=theme.SIDEBAR, fg=theme.MUTED, font="SunValleyCaptionFont").pack(
-            anchor="w", padx=22, pady=(0, 20))  # fmt: skip
+        brand = tk.Frame(side, bg=theme.SIDEBAR)
+        brand.pack(anchor="w", padx=20, pady=(22, 20))
+        self.logo = theme.logo(self)
+        if self.logo:
+            tk.Label(brand, image=self.logo, bg=theme.SIDEBAR).pack(side="left", padx=(0, 10))
+        names = tk.Frame(brand, bg=theme.SIDEBAR)
+        names.pack(side="left")
+        tk.Label(names, text="Pemindai LJK", bg=theme.SIDEBAR, fg=theme.FG, font="SunValleySubtitleFont").pack(anchor="w")
+        tk.Label(names, text=f"OMRChecker v{VERSION}", bg=theme.SIDEBAR, fg=theme.MUTED, font="SunValleyCaptionFont").pack(
+            anchor="w")  # fmt: skip
         self.stepper = theme.Stepper(side, STEPS, self.jump, width=250)
         self.stepper.pack(fill="x")
         ttk.Button(side, text="Mode lanjutan", command=self.advanced).pack(side="bottom", anchor="w", padx=20, pady=20)

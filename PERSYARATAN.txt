@@ -46,6 +46,7 @@ MENJALANKAN
    digital: klik "More info" lalu "Run anyway".
    Pembukaan pertama bisa memakan waktu 10-20 detik.
 3. Ikuti 6 langkah di jendela wizard.
+   Panduan lengkap bergambar: PANDUAN.pdf (di folder yang sama).
 
 Template disimpan di %APPDATA%\OMRChecker\templates.
 Bila program menutup sendiri, lihat %APPDATA%\OMRChecker\crash.log,

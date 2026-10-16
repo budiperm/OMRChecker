@@ -21,6 +21,8 @@ Fork dari [Udayraj123/OMRChecker](https://github.com/Udayraj123/OMRChecker) deng
 
 Detail: [PERSYARATAN.txt](PERSYARATAN.txt).
 
+**Panduan langkah demi langkah:** [PANDUAN.pdf](PANDUAN.pdf) (ikut di dalam zip rilis). Dibuat ulang dengan `docs/panduan/shots.py` lalu `docs/panduan/build.py`.
+
 ### Pengembangan
 - Menjalankan dari kode: `pip install -r requirements.gui.txt` lalu `python gui.py` (Python 3.10+).
 - Build exe di Windows: `build_windows.bat`; dari Linux (Docker + Wine): `./build_windows_docker.sh`.
