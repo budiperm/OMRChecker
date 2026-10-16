@@ -6,7 +6,7 @@
    4 Folder hasil   5 Proses & periksa   6 Rekap & ekspor
 
  Settings are kept between sessions (ujian.Exam). The previous main window
- stays available as "Mode lanjutan".
+ stays available with --lanjutan ("Mode lanjutan").
 
 """
 
@@ -24,7 +24,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "0.6.0"
+VERSION = "1.0.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -208,8 +208,9 @@ class TemplateStep(Step):
         bar.pack(fill="x", pady=6)
         ttk.Button(bar, text="+  Buat baru dari LJK kosong...", command=self.create, style="Accent.TButton").pack(side="left")
         ttk.Button(bar, text="Edit...", command=self.edit).pack(side="left", padx=4)
-        ttk.Button(bar, text="Impor...", command=self.import_old).pack(side="left")
-        ttk.Button(bar, text="Hapus", command=self.delete).pack(side="left", padx=4)
+        ttk.Button(bar, text="Impor...", command=self.import_file).pack(side="left")
+        ttk.Button(bar, text="Ekspor...", command=self.export_file).pack(side="left", padx=4)
+        ttk.Button(bar, text="Hapus", command=self.delete).pack(side="left")
         self.preview = ImagePreview(self)
         self.preview.grid(row=0, column=1, sticky="nsew")
         self.templates = []
@@ -260,19 +261,40 @@ class TemplateStep(Step):
             return
         self.editor(edit_folder=t.path)
 
-    def import_old(self):
-        folder = filedialog.askdirectory(parent=self, title="Folder berisi template.json (dari mode lanjutan)")
-        if not folder:
-            return
-        name = simpledialog.askstring(APP_TITLE, "Nama template:", parent=self, initialvalue=Path(folder).name)
-        if not name:
+    def import_file(self):
+        """A .ljk file from another computer, or a template.json (advanced mode)."""
+        path = filedialog.askopenfilename(
+            parent=self, title="Impor template LJK",
+            filetypes=[("Template LJK", f"*{ujian.TEMPLATE_EXT} template.json"), ("Semua file", "*.*")],
+        )  # fmt: skip
+        if not path:
             return
         try:
-            path = ujian.import_template_folder(folder, name, self.wizard.library)
-        except ValueError as e:
+            folder = ujian.import_template_file(path, self.wizard.library)
+        except (ValueError, OSError) as e:
             messagebox.showerror(APP_TITLE, str(e), parent=self)
             return
-        self.reload(select=path)
+        self.reload(select=folder)
+
+    def export_file(self):
+        t = self.selected()
+        if not t:
+            messagebox.showinfo(APP_TITLE, "Pilih template yang akan diekspor.", parent=self)
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Ekspor template LJK", defaultextension=ujian.TEMPLATE_EXT,
+            initialfile=f"{ujian.safe_name(t.name)}{ujian.TEMPLATE_EXT}",
+            filetypes=[("Template LJK", f"*{ujian.TEMPLATE_EXT}")],
+        )  # fmt: skip
+        if not path:
+            return
+        try:
+            ujian.export_template_file(t.path, path)
+        except OSError as e:
+            messagebox.showerror(APP_TITLE, f"Template tidak bisa disimpan:\n{e}", parent=self)
+            return
+        messagebox.showinfo(APP_TITLE, f"Template tersimpan:\n{path}\n\nDi komputer lain, buka dengan tombol 'Impor...'.",
+                            parent=self)  # fmt: skip
 
     def delete(self):
         t = self.selected()
@@ -831,7 +853,7 @@ class ProcessStep(Step):
 
     def enter(self):
         # never starts by itself: the user clicks "Proses LJK" when ready
-        self.total = len(scan_files(self.exam.scans_dir))
+        self.total = ujian.count_sheets(scan_files(self.exam.scans_dir))
         self.load_results()
         if self.wizard.reprocess:
             old = " Hasil lama di folder ini akan diganti." if self.results and self.wizard.clear_old else ""
@@ -848,6 +870,28 @@ class ProcessStep(Step):
         if self.wizard.clear_old and out.is_dir():
             shutil.rmtree(out)
             self.wizard.clear_old = False
+        skip = ujian.done_sheets(out)
+        if skip and len(skip) < self.total:  # an earlier run was stopped part way
+            choice = ChoiceDialog.ask(
+                self, "Lanjutkan pemeriksaan?",
+                f"{len(skip)} dari {self.total} LJK sudah diperiksa sebelumnya.",
+                [("batal", "Batal", False), ("ulang", "Periksa ulang semua", False),
+                 ("lanjut", f"Lanjutkan sisanya ({self.total - len(skip)})", True)],
+                detail="Koreksi manual yang sudah dibuat tetap tersimpan.",
+            )  # fmt: skip
+            if choice in (None, "batal"):
+                return
+            if choice == "ulang":
+                for entry in out.iterdir():  # results only: ujian.json and foreign files stay
+                    if entry.name == ujian.EXAM_FILE:
+                        continue
+                    if entry.is_dir() and (entry.name in gui.RESULT_ENTRIES or not gui.foreign_files(entry)):
+                        shutil.rmtree(entry)
+                    elif entry.name in gui.RESULT_ENTRIES:
+                        entry.unlink()
+                skip = []
+        else:
+            skip = []  # everything (or nothing) read before: read it all again
         self.wizard.reprocess = False  # corrections stay: they are keyed by file
         self.log = []
         self.done_count = 0
@@ -855,7 +899,7 @@ class ProcessStep(Step):
         self.progress_text.set(f"0 / {self.total}")
         ctx = mp.get_context("spawn")
         self.q = ctx.Queue()
-        options = {"template_dir": self.exam.template}
+        options = {"template_dir": self.exam.template, "skip": skip}
         self.proc = ctx.Process(target=gui.run_worker, args=(self.q, self.exam.scans_dir, str(out), options), daemon=True)
         self.proc.start()
         self.run_btn.configure(state="disabled")
@@ -866,7 +910,7 @@ class ProcessStep(Step):
     def stop(self):
         if self.proc and self.proc.is_alive():
             self.proc.terminate()
-        self.finish(False, "Dihentikan.")
+        self.finish(False, None)
 
     def poll(self):
         done = None
@@ -875,7 +919,8 @@ class ProcessStep(Step):
                 msg = self.q.get_nowait()
                 if msg[0] == "log":
                     self.log.append(msg[1])
-                    self.done_count += msg[1].count("Opening image")
+                elif msg[0] == "progress":
+                    self.done_count = msg[1]
                 else:
                     done = msg
         except (queue.Empty, EOFError, OSError):
@@ -907,6 +952,12 @@ class ProcessStep(Step):
                     "Klik 'Log' untuk melihat rinciannya.",
                     parent=self,
                 )
+        elif message is None:  # stopped by the user
+            self.load_results()
+            done = len(ujian.done_sheets(self.exam.output_dir))
+            self.progress_text.set("Dihentikan")
+            self.summary.set(f"Dihentikan: {done} dari {self.total} LJK sudah diperiksa. "
+                             "Klik '▶ Proses LJK' untuk melanjutkan sisanya.")  # fmt: skip
         else:
             self.progress_text.set("Gagal")
             messagebox.showerror(APP_TITLE, f"Proses gagal:\n{message}", parent=self)
@@ -1128,11 +1179,20 @@ class ExportStep(Step):
         bar = ttk.Frame(self)
         bar.pack(fill="x", pady=8)
         ttk.Button(bar, text="Ekspor ke Excel...", command=self.export, style="Accent.TButton").pack(side="left")
-        ttk.Button(bar, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="left", padx=6)
+        ttk.Button(bar, text="Laporan per peserta (PDF)...", command=self.export_reports).pack(side="left", padx=6)
+        ttk.Button(bar, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="left")
         self.export_info = tk.StringVar()
         self.export_label = ttk.Label(bar, textvariable=self.export_info, foreground=theme.MUTED)
         self.export_label.pack(side="left", padx=8)
         ttk.Button(bar, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
+        order = ttk.Frame(self)
+        order.pack(fill="x")
+        ttk.Label(order, text="Urutan rekap & laporan:").pack(side="left")
+        self.order = tk.StringVar()
+        self.order_box = ttk.Combobox(order, textvariable=self.order, state="readonly", width=24,
+                                      values=list(ujian.RANK_ORDERS.values()))  # fmt: skip
+        self.order_box.pack(side="left", padx=6)
+        self.order_box.bind("<<ComboboxSelected>>", lambda e: self.on_order())
 
     def show_export_status(self):
         if not self.wizard.export_pending():
@@ -1145,7 +1205,31 @@ class ExportStep(Step):
             self.export_info.set("Belum diekspor")
             self.export_label.configure(foreground=theme.WARN)
 
+    def on_order(self):
+        label = self.order.get()
+        self.exam.rekap_order = next((k for k, v in ujian.RANK_ORDERS.items() if v == label), "nama")
+        self.exam.save(self.wizard.settings)
+        self.show_export_status()
+
+    def export_reports(self):
+        name = ujian.safe_name(f"Laporan {self.exam.name or 'Ujian'}")
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Simpan laporan per peserta", defaultextension=".pdf",
+            initialdir=self.exam.output_dir, initialfile=f"{name}.pdf", filetypes=[("PDF", "*.pdf")],
+        )  # fmt: skip
+        if not path:
+            return
+        results = self.wizard.compute_results()
+        try:
+            ujian.export_reports_pdf(path, results, self.exam, self.wizard.template.sections, self.exam.name)
+        except (OSError, RuntimeError) as e:
+            messagebox.showerror(APP_TITLE, f"Laporan tidak bisa disimpan (mungkin sedang dibuka?):\n{e}", parent=self)
+            return
+        if messagebox.askyesno(APP_TITLE, "Laporan tersimpan. Buka sekarang?", parent=self):
+            open_file(path, self)
+
     def enter(self):
+        self.order.set(ujian.RANK_ORDERS.get(self.exam.rekap_order, ujian.RANK_ORDERS["nama"]))
         results = self.wizard.compute_results()
         self.results = results
         s = ujian.summary(results)
@@ -1321,9 +1405,9 @@ class Wizard(tk.Tk):
             anchor="w")  # fmt: skip
         self.stepper = theme.Stepper(side, STEPS, self.jump, width=250)
         self.stepper.pack(fill="x")
-        ttk.Button(side, text="Mode lanjutan", command=self.advanced).pack(side="bottom", anchor="w", padx=20, pady=(4, 20))
+        # the old main window stays reachable with OMRChecker.exe --lanjutan
         self.help_btn = ttk.Button(side, text="Bantuan", command=self.show_help_menu)
-        self.help_btn.pack(side="bottom", anchor="w", padx=20, pady=4)
+        self.help_btn.pack(side="bottom", anchor="w", padx=20, pady=(4, 20))
         ttk.Button(side, text="Buka ujian lama...", command=self.open_exam).pack(side="bottom", anchor="w", padx=20, pady=4)
 
         main = ttk.Frame(self)
@@ -1448,11 +1532,17 @@ class Wizard(tk.Tk):
         menu = tk.Menu(self, tearoff=False)
         menu.add_command(label="Panduan (PDF)", command=self.open_guide)
         menu.add_command(label="Buka folder data & log", command=lambda: open_file(ujian.app_data_dir(), self))
+        menu.add_command(label="Cek versi terbaru (halaman unduhan)", command=self.open_releases)
         menu.add_separator()
         menu.add_command(label="Tentang Pemindai LJK", command=self.about)
         menu.update_idletasks()
         b = self.help_btn
         menu.tk_popup(b.winfo_rootx(), b.winfo_rooty() - menu.winfo_reqheight())
+
+    def open_releases(self):
+        import webbrowser
+
+        webbrowser.open(RELEASES_URL + "/latest")
 
     def open_guide(self):
         guide = install_dir() / "PANDUAN.pdf"

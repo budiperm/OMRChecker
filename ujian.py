@@ -335,6 +335,57 @@ def import_template_folder(src, name, lib=None):
     return folder
 
 
+TEMPLATE_EXT = ".ljk"  # one-file template: a zip of the library folder
+
+
+def export_template_file(folder, path):
+    """Pack a library template into one .ljk file to use on another computer."""
+    import zipfile
+
+    folder, path = Path(folder), Path(path)
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in sorted(folder.iterdir()):
+            if f.is_file():
+                z.write(f, f.name)
+    return path
+
+
+def import_template_file(path, lib=None):
+    """Unpack a .ljk file into the library; returns the new folder. A plain
+    template.json (advanced mode) brings in the folder it is in."""
+    import zipfile
+
+    path, lib = Path(path), Path(lib or library_dir())
+    if path.name == "template.json":
+        return import_template_folder(path.parent, path.parent.name, lib)
+    try:
+        z = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError) as e:
+        raise ValueError(f"Bukan file template LJK ({TEMPLATE_EXT}): {path.name}") from e
+    with z:
+        names = [n for n in z.namelist() if not n.endswith("/")]
+        if "template.json" not in names:
+            raise ValueError(f"File {path.name} tidak berisi template.json")
+        if any(Path(n).name != n or n.startswith(".") for n in names):  # no folders, no ../
+            raise ValueError(f"File {path.name} berisi nama file yang tidak wajar, tidak diimpor.")
+        meta = json.loads(z.read(META_FILE).decode("utf-8")) if META_FILE in names else {}
+        name = meta.get("name") or path.stem
+        folder = lib / safe_name(name)
+        n = 2
+        while folder.exists():
+            folder = lib / f"{safe_name(name)} ({n})"
+            n += 1
+        folder.mkdir(parents=True)
+        for n_ in names:
+            (folder / n_).write_bytes(z.read(n_))
+    try:
+        read_library_template(folder)
+    except (OSError, ValueError) as e:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise ValueError(f"Template di {path.name} rusak: {e}") from e
+    return folder
+
+
 def delete_template(folder):
     shutil.rmtree(folder)
 
@@ -365,6 +416,7 @@ class Exam:
     # part -> "1-10:2, 11-20:1": points for a correct answer per question range;
     # questions not listed use `correct`
     weights: dict = field(default_factory=dict)
+    rekap_order: str = "nama"  # RANK_ORDERS key: row order of the Excel rekap
     exported_file: str = ""  # last Excel rekap written
     exported_state: str = ""  # rekap_state() at that moment
 
@@ -505,6 +557,38 @@ def read_results(output_dir):
     return list(rows.values()), list(errors.values())
 
 
+def done_sheets(output_dir):
+    """[folder relative to the scans, file_id] of every sheet already read
+    (or found unreadable) in output_dir: what a resumed run can skip."""
+    out = Path(output_dir)
+    if not out.is_dir():
+        return []
+    done = set()
+    for pattern in ("Results/Results_*.csv", "Manual/ErrorFiles.csv"):
+        for f in out.rglob(pattern):
+            rel = f.parent.parent.relative_to(out).as_posix()
+            with open(f, newline="", encoding="utf-8") as fh:
+                done.update((rel, r["file_id"]) for r in csv.DictReader(fh) if r.get("file_id"))
+    return sorted([list(k) for k in done])
+
+
+def count_sheets(paths):
+    """Number of sheets in the scan files: a PDF counts once per page."""
+    total = 0
+    for p in paths:
+        if Path(p).suffix.lower() == ".pdf":
+            try:
+                import fitz
+
+                with fitz.open(str(p)) as doc:
+                    total += max(1, doc.page_count)
+                continue
+            except Exception:  # unreadable PDF: the run will report it
+                pass
+        total += 1
+    return total
+
+
 @dataclass
 class SheetResult:
     file_id: str
@@ -519,6 +603,7 @@ class SheetResult:
     score: float = None
     grade: float = None
     passed: bool = None
+    rank: int = None  # 1 = highest grade (rank_results)
     parts: dict = field(default_factory=dict)  # part -> {benar, salah, kosong, skor, nilai}
     flags: list = field(default_factory=list)
     student: dict = None  # matched row of the student list
@@ -686,6 +771,40 @@ def _score_one(res, exam, sections):
         res.passed = res.grade >= exam.kkm
 
 
+RANK_ORDERS = {
+    "nilai": "Nilai tertinggi dulu",
+    "nama": "Kelompok, lalu nama",
+    "file": "Nama file scan",
+}
+
+
+def rank_results(results):
+    """Rank by grade, highest = 1; equal grades share a rank (1, 2, 2, 4).
+    Sheets without a grade get None."""
+    graded = sorted((r for r in results if r.grade is not None), key=lambda r: -r.grade)
+    prev, rank = None, 0
+    for i, r in enumerate(graded, 1):
+        if r.grade != prev:
+            rank, prev = i, r.grade
+        r.rank = rank
+    for r in results:
+        if r.grade is None:
+            r.rank = None
+    return results
+
+
+def order_results(results, order="nama"):
+    """The rekap's row order (RANK_ORDERS); ungraded or unreadable sheets go last."""
+    rank_results(results)
+    if order == "nilai":
+        key = lambda r: (r.rank is None, r.rank or 0, natural_key(r.name), r.file_id)  # noqa: E731
+    elif order == "file":
+        key = lambda r: natural_key(r.file_id)  # noqa: E731
+    else:
+        key = lambda r: (r.unreadable, natural_key(r.kelas), natural_key(r.name), natural_key(r.file_id))  # noqa: E731
+    return sorted(results, key=key)
+
+
 def absent_students(results, students):
     present = {id(r.student) for r in results if r.student is not None}
     return [s for s in students if id(s) not in present]
@@ -811,6 +930,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
 
     sections = as_sections(questions)
     named = [s for s in sections if s]
+    results = order_results(results, exam.rekap_order)
     bold = Font(bold=True)
     head_fill = PatternFill("solid", fgColor="DDEBF7")
     red = PatternFill("solid", fgColor="F8CBAD")
@@ -850,7 +970,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
         headers.append("Kode Naskah")
     for sec in named:
         headers += [f"Benar {sec}", f"Nilai {sec}"]
-    headers += ["Benar", "Salah", "Kosong", "Skor", "Nilai"]
+    headers += ["Benar", "Salah", "Kosong", "Skor", "Nilai", "Peringkat"]
     if exam.kkm:
         headers.append("Keterangan")
     headers += ["Catatan", "File"]
@@ -862,7 +982,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
         for sec in named:
             part = r.parts.get(sec, {})
             row += [part.get("benar"), part.get("nilai")]
-        row += [r.correct, r.wrong, r.blank, r.score, r.grade]
+        row += [r.correct, r.wrong, r.blank, r.score, r.grade, r.rank]
         if exam.kkm:
             row.append("" if r.passed is None else "Lulus" if r.passed else "Tidak lulus")
         row += ["; ".join(r.flags), r.file_id]
@@ -909,6 +1029,96 @@ def export_excel(path, results, exam, questions, students=None, title=""):
 
     path = Path(path)
     wb.save(path)
+    return path
+
+
+# ---------------------------------------------------------------------------
+# Per-participant report (PDF)
+# ---------------------------------------------------------------------------
+
+REPORT_CSS = """
+* {font-family: sans-serif; font-size: 10pt;}
+h1 {font-size: 15pt; margin: 0 0 2pt 0;}
+h2 {font-size: 11pt; margin: 10pt 0 3pt 0;}
+p.muted {color: #666666; margin: 0 0 8pt 0;}
+table {border-collapse: collapse; width: 100%;}
+td, th {border: 1px solid #b0b7c3; padding: 2pt 4pt; text-align: center;}
+th {background-color: #ddebf7;}
+td.l {text-align: left;}
+td.ok {background-color: #d9f2df;}
+td.bad {background-color: #f8cbad;}
+td.blank {background-color: #ededed;}
+"""
+
+
+def _report_html(r, exam, sections, title, total):
+    from html import escape as esc
+
+    keys = keys_for(exam, r.code) or {}
+    ident = [("No. Peserta", r.nis), ("Nama", r.name), ("Kelompok", r.kelas)]
+    ident += [("Kode naskah" if k == exam.code_column else k, v)
+              for k, v in r.info.items() if k not in ("NIS", "NoPeserta", "Nama")]  # fmt: skip
+    ident.append(("File scan", r.file_id))
+    rows = "".join(f'<tr><td class="l" width="30%">{esc(k)}</td><td class="l">{esc(str(v))}</td></tr>'
+                   for k, v in ident if str(v).strip())  # fmt: skip
+    status = "" if r.passed is None else ("Lulus" if r.passed else "Tidak lulus")
+    rank = f"{r.rank} dari {total}" if r.rank else "-"
+    score = (
+        "<tr><th>Benar</th><th>Salah</th><th>Kosong</th><th>Skor</th><th>Nilai</th><th>Peringkat</th>"
+        + ("<th>Keterangan</th>" if exam.kkm else "") + "</tr>"
+        + f"<tr><td>{r.correct}</td><td>{r.wrong}</td><td>{r.blank}</td>"
+        + f"<td>{'' if r.score is None else f'{r.score:g}'}</td><td><b>{'' if r.grade is None else f'{r.grade:g}'}</b></td>"
+        + f"<td>{rank}</td>" + (f"<td>{status}</td>" if exam.kkm else "") + "</tr>"
+    )
+    parts = ""
+    for sec, labels in sections.items():
+        key = keys.get(sec, "")
+        cells = []
+        for n, q in enumerate(labels):
+            a = r.answers.get(q, "")
+            k = key[n] if n < len(key) else ""
+            css = "blank" if a == "" else ("ok" if a == k else "bad") if k else ""
+            cells.append(f'<td>{esc(str(n + 1))}</td><td class="{css}">{esc(a or "-")}</td><td>{esc(k or "")}</td>')
+        per_row = 4
+        body = "".join("<tr>" + "".join(cells[i : i + per_row]) + "</tr>" for i in range(0, len(cells), per_row))
+        head = "<tr>" + "<th>No</th><th>Jawab</th><th>Kunci</th>" * min(per_row, len(cells)) + "</tr>"
+        part = r.parts.get(sec)
+        summary = f" (benar {part['benar']}, nilai {part['nilai']:g})" if part else ""
+        parts += f"<h2>{esc(f'Bagian {sec}' if sec else 'Jawaban')}{esc(summary)}</h2><table>{head}{body}</table>"
+    notes = f"<h2>Catatan</h2><p>{esc('; '.join(r.flags))}</p>" if r.flags else ""
+    return (
+        f"<h1>{esc(title or exam.name or 'Hasil Ujian')}</h1>"
+        f'<p class="muted">Laporan hasil peserta • dicetak {time.strftime("%d-%m-%Y %H:%M")}</p>'
+        f"<table>{rows}</table><h2>Nilai</h2><table>{score}</table>{parts}{notes}"
+    )
+
+
+def export_reports_pdf(path, results, exam, questions, title=""):
+    """One A4 page (or more) per graded sheet: identity, score, rank and every
+    answer next to the key. Unreadable sheets are left out."""
+    try:
+        import pymupdf as fitz
+    except ImportError:
+        import fitz
+
+    sections = as_sections(questions)
+    results = order_results([r for r in results if not r.unreadable], exam.rekap_order)
+    total = sum(1 for r in results if r.rank)
+    path = Path(path)
+    writer = fitz.DocumentWriter(str(path))
+    page = fitz.paper_rect("a4")
+    where = page + (36, 36, -36, -36)
+    try:
+        for r in results:
+            story = fitz.Story(html=_report_html(r, exam, sections, title, total), user_css=REPORT_CSS)
+            more = True
+            while more:
+                dev = writer.begin_page(page)
+                more, _ = story.place(where)
+                story.draw(dev)
+                writer.end_page()
+    finally:
+        writer.close()
     return path
 
 

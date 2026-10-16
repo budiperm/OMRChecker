@@ -6,6 +6,7 @@ real LJK.
 Run: python -m pytest tests_gui
 """
 
+import json
 import random
 import shutil
 import subprocess
@@ -208,8 +209,9 @@ def test_export_excel(tmp_path):
     header = [c.value for c in ws[5]]
     assert header[:10] == ["No", "No. Peserta", "Nama", "Kelompok", "Kode Naskah", "Benar", "Salah", "Kosong", "Skor", "Nilai"]
     data = {ws.cell(r, 2).value: [c.value for c in ws[r]] for r in range(6, 8)}
-    assert data["1"][9] == 100 and data["1"][10] == "Lulus"
-    assert data["2"][9] == 60 and data["2"][10] == "Tidak lulus"
+    assert header[10:12] == ["Peringkat", "Keterangan"]
+    assert data["1"][9:12] == [100, 1, "Lulus"]
+    assert data["2"][9:12] == [60, 2, "Tidak lulus"]
     flagged_row = next(r for r in range(6, 8) if ws.cell(r, 2).value == "2")
     assert ws.cell(flagged_row, 1).fill.fgColor.rgb.endswith("F8CBAD")  # not in list -> red
     assert [c.value for c in wb["Tidak Ikut Ujian"][2]] == [1, "9", "Absen", "9A"]
@@ -218,6 +220,58 @@ def test_export_excel(tmp_path):
     r2 = next(r for r in range(2, 4) if jaw.cell(r, 1).value == "2")
     assert jaw.cell(r2, 5).fill.fgColor.rgb.endswith("EDEDED")  # blank q2: grey
     assert jaw.cell(r2, 8).fill.fgColor.rgb.endswith("F8CBAD")  # wrong q5: red
+
+
+def test_rank_and_rekap_order():
+    rows = [
+        row("c.jpg", list("ABCDE"), KodeSoal="101", NIS="3", Nama="CICI"),
+        row("a.jpg", ["A", "", "C", "D", "A"], KodeSoal="101", NIS="1", Nama="ANI"),
+        row("b.jpg", list("ABCDE"), KodeSoal="101", NIS="2", Nama="BUDI"),
+    ]
+    e = exam()
+    results = ujian.score_results(rows, [{"file_id": "x.jpg"}], e, Q5)
+    by_grade = ujian.order_results(results, "nilai")
+    assert [(r.file_id, r.rank) for r in by_grade] == [("b.jpg", 1), ("c.jpg", 1), ("a.jpg", 3), ("x.jpg", None)]
+    assert [r.file_id for r in ujian.order_results(results, "file")] == ["a.jpg", "b.jpg", "c.jpg", "x.jpg"]
+    assert [r.name for r in ujian.order_results(results, "nama")][:3] == ["ANI", "BUDI", "CICI"]
+
+
+def test_participant_reports_pdf(tmp_path):
+    fitz = pytest.importorskip("fitz")
+    rows = [row("a.jpg", ["A", "", "C", "D", "A"], KodeSoal="101", NIS="1", Nama="ANI")]
+    e = exam(kkm=50, name="Tes Rekrutmen")
+    results = ujian.score_results(rows, [{"file_id": "rusak.jpg"}], e, Q5)
+    path = ujian.export_reports_pdf(tmp_path / "laporan.pdf", results, e, Q5, title="Tes Rekrutmen")
+    with fitz.open(str(path)) as doc:
+        assert doc.page_count == 1  # unreadable sheets get no page
+        text = doc[0].get_text()
+    for expected in ("Tes Rekrutmen", "ANI", "No. Peserta", "Nilai", "Peringkat", "Lulus"):
+        assert expected in text, expected
+
+
+def test_template_file_roundtrip(tmp_path):
+    src = tmp_path / "lib" / "LJK A"
+    src.mkdir(parents=True)
+    (src / "template.json").write_text(json.dumps({"fieldBlocks": {}, "bubbleDimensions": [10, 10],
+                                                   "pageDimensions": [100, 100]}), encoding="utf-8")  # fmt: skip
+    (src / ujian.META_FILE).write_text(json.dumps({"name": "LJK A"}), encoding="utf-8")
+    packed = ujian.export_template_file(src, tmp_path / "LJK A.ljk")
+    other = tmp_path / "lib2"
+    folder = ujian.import_template_file(packed, other)
+    assert folder == other / "LJK A" and (folder / "template.json").is_file()
+    assert ujian.import_template_file(packed, other) == other / "LJK A (2)"  # never overwrites
+
+    import zipfile
+
+    bad = tmp_path / "jahat.ljk"
+    with zipfile.ZipFile(bad, "w") as z:
+        z.writestr("template.json", "{}")
+        z.writestr("../keluar.txt", "x")
+    with pytest.raises(ValueError, match="tidak wajar"):
+        ujian.import_template_file(bad, other)
+    (tmp_path / "bukan.ljk").write_text("halo")
+    with pytest.raises(ValueError, match="Bukan file template"):
+        ujian.import_template_file(tmp_path / "bukan.ljk", other)
 
 
 def test_exam_settings_roundtrip(tmp_path):

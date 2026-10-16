@@ -145,6 +145,27 @@ def run_worker(q, input_dir, output_dir, options):
 
         register_processors()
 
+        # One ("progress", n) message per sheet (PDF page) so the GUI does not
+        # have to parse log text; sheets listed in options["skip"] as
+        # [folder relative to the scans, file_id] were read in an earlier,
+        # stopped run and are not read again.
+        skip = {tuple(k) for k in options.get("skip", ())}
+        scans_root = Path(input_dir)
+        process_one = entry._process_single_image
+        seen = [0]
+
+        def process_or_skip(file_path, img_name, *rest):
+            seen[0] += 1
+            try:
+                rel = Path(file_path).parent.relative_to(scans_root).as_posix()
+            except ValueError:
+                rel = "."
+            if (rel, img_name) not in skip:
+                process_one(file_path, img_name, *rest)
+            q.put(("progress", seen[0]))
+
+        entry._process_single_image = process_or_skip
+
         def apply_overrides(config):
             if not options.get("show_images"):
                 config.outputs.show_image_level = 0
@@ -844,7 +865,7 @@ class ListQueue:
     def put(self, msg):
         if msg[0] == "log":
             self.log_file.write(msg[1])
-        else:
+        elif msg[0] == "done":
             self.result = msg
 
 

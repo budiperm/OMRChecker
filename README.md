@@ -30,7 +30,10 @@ Aplikasi berjalan sepenuhnya di komputer Anda (luring). Tidak perlu memasang Pyt
 - **Pembuat template** dari LJK kosong (PDF atau hasil scan): bulatan, kolom identitas, dan bagian soal dideteksi otomatis, lalu bisa diedit manual.
 - **Kunci jawaban** per kode naskah dan per bagian, dengan bobot nilai per soal (mis. `1-10=2, 11-20=1`).
 - **Koreksi manual** hasil baca, daftar peserta dari Excel, dan analisis butir soal.
-- **Ekspor rekap ke Excel**: nilai per bagian, jawaban per soal, analisis butir, dan peserta yang tidak ikut.
+- **Ekspor rekap ke Excel**: nilai per bagian, peringkat, jawaban per soal, analisis butir, dan peserta yang tidak ikut.
+- **Laporan per peserta (PDF)**: satu halaman hasil untuk setiap peserta, siap dicetak atau dibagikan.
+- **Lanjutkan pemeriksaan** yang dihentikan, atau setelah scan baru ditambahkan, tanpa memeriksa ulang yang sudah selesai.
+- **Template satu file** (`.ljk`) untuk dipindahkan ke komputer lain.
 - **Buka ujian lama** dari folder hasilnya: kunci, koreksi, dan daftar peserta tetap tersimpan, sehingga rekap bisa diekspor ulang kapan saja.
 - **Tahan terhadap scan yang kurang rapi**: penyelarasan memakai kotak hitam di sudut LJK, lembar terbalik diputar otomatis, lembar terpotong atau kosong ditandai tanpa menggagalkan proses.
 
