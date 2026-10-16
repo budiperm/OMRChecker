@@ -1,0 +1,88 @@
+PERJANJIAN LISENSI PENGGUNA AKHIR (EULA)
+OMRChecker - Pemindai LJK
+
+DRAF - harap ditinjau sebelum dirilis. Ganti setiap [ ... ] dengan data yang benar.
+
+Harap baca perjanjian ini dengan saksama sebelum memasang atau memakai
+perangkat lunak ini. Dengan memilih "Saya menerima perjanjian ini" lalu
+melanjutkan instalasi, atau dengan memakai perangkat lunak ini, Anda
+menyetujui seluruh ketentuan di bawah. Bila Anda tidak setuju, jangan
+pasang dan jangan pakai perangkat lunak ini.
+
+1. PIHAK DAN DEFINISI
+   "Penerbit" adalah [NAMA PENERBIT/PERUSAHAAN], [ALAMAT].
+   "Perangkat Lunak" adalah program OMRChecker - Pemindai LJK beserta
+   file pendukung, contoh template, dan dokumentasinya.
+   "Anda" adalah orang atau organisasi (sekolah, perusahaan, lembaga
+   pelatihan, atau lainnya) yang memasang atau memakai Perangkat Lunak.
+
+2. PEMBERIAN LISENSI
+   Penerbit memberi Anda lisensi yang tidak eksklusif dan tidak dapat
+   dialihkan untuk memasang dan memakai Perangkat Lunak di komputer yang
+   Anda miliki atau kuasai, untuk memeriksa lembar jawaban ujian, tes,
+   seleksi, atau survei di lingkungan Anda sendiri.
+   [Sesuaikan: jumlah komputer yang diizinkan, masa berlaku, dan apakah
+   lisensi berbayar atau gratis.]
+
+3. PEMBATASAN
+   Kecuali diizinkan oleh hukum yang berlaku atau oleh lisensi komponen
+   pihak ketiga (lihat butir 4), Anda tidak boleh:
+   a. menjual, menyewakan, atau mendistribusikan ulang Perangkat Lunak
+      tanpa izin tertulis dari Penerbit;
+   b. menghapus atau mengubah pemberitahuan hak cipta, merek, atau
+      lisensi di dalam Perangkat Lunak;
+   c. memakai Perangkat Lunak untuk tujuan yang melanggar hukum.
+
+4. KOMPONEN PIHAK KETIGA DAN SUMBER TERBUKA
+   Perangkat Lunak memuat komponen sumber terbuka, termasuk OMRChecker
+   (Lisensi MIT, hak cipta Udayraj Deshmukh dan kontributor), Python,
+   OpenCV, NumPy, pandas, Matplotlib, openpyxl, PyMuPDF, dan lainnya.
+   Daftar lengkap dan teks lisensinya ada di file
+   PEMBERITAHUAN-PIHAK-KETIGA.txt di folder instalasi. Setiap komponen
+   tersebut tunduk pada lisensinya sendiri. Tidak ada ketentuan dalam
+   perjanjian ini yang membatasi hak Anda berdasarkan lisensi tersebut.
+
+5. DATA ANDA
+   Perangkat Lunak bekerja sepenuhnya di komputer Anda dan tidak
+   mengirim hasil scan, nama peserta, nilai, atau data lain ke internet.
+   Anda bertanggung jawab atas keamanan dan kerahasiaan data peserta
+   ujian yang Anda olah, sesuai peraturan perlindungan data pribadi yang
+   berlaku (termasuk UU No. 27 Tahun 2022 tentang Pelindungan Data
+   Pribadi).
+
+6. TANPA JAMINAN
+   Perangkat Lunak diberikan "SEBAGAIMANA ADANYA" tanpa jaminan apa pun,
+   tersurat maupun tersirat, termasuk jaminan kelayakan untuk
+   diperdagangkan, kesesuaian untuk tujuan tertentu, dan ketiadaan
+   pelanggaran. Hasil pembacaan lembar jawaban dapat keliru, misalnya
+   karena kualitas scan, kertas terlipat, atau isian yang kurang tebal.
+   Anda wajib memeriksa hasil sebelum dipakai untuk keputusan penting
+   seperti kelulusan, penerimaan, atau penilaian karyawan.
+
+7. BATASAN TANGGUNG JAWAB
+   Sejauh diizinkan oleh hukum, Penerbit tidak bertanggung jawab atas
+   kerugian langsung maupun tidak langsung, kehilangan data, kehilangan
+   keuntungan, atau keputusan yang diambil berdasarkan hasil Perangkat
+   Lunak. [Sesuaikan: batas maksimal tanggung jawab, mis. sebesar harga
+   lisensi yang telah dibayar.]
+
+8. PEMBARUAN
+   Penerbit dapat menerbitkan versi baru Perangkat Lunak. Versi baru
+   dapat disertai perjanjian lisensi yang diperbarui.
+
+9. BERAKHIRNYA LISENSI
+   Lisensi ini berakhir otomatis bila Anda melanggar ketentuannya. Bila
+   lisensi berakhir, Anda wajib berhenti memakai dan menghapus Perangkat
+   Lunak.
+
+10. HUKUM YANG BERLAKU
+    Perjanjian ini tunduk pada hukum Republik Indonesia. Sengketa yang
+    timbul diselesaikan secara musyawarah, dan bila tidak tercapai
+    kesepakatan, melalui [Pengadilan Negeri ...].
+
+11. KONTAK
+    [NAMA PENERBIT/PERUSAHAAN]
+    [Email / telepon / situs web]
+
+Hak cipta (c) 2026 [NAMA PENERBIT/PERUSAHAAN]. Seluruh hak dilindungi,
+kecuali hak yang diberikan oleh lisensi komponen pihak ketiga.

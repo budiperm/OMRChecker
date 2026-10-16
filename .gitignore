@@ -19,3 +19,8 @@ dist/
 *.spec
 tests_gui/data/*.json
 tests_gui/data/*.pdf
+
+# Installer (release.yml)
+build-installer/
+dist-installer/
+PEMBERITAHUAN-PIHAK-KETIGA.txt
