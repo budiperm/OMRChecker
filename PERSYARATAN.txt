@@ -25,7 +25,7 @@ SCAN LJK
 SCAN LANGSUNG DARI SCANNER
 --------------------------
 Di Langkah 3 ada tombol "Scan dari scanner...". Semua lembar di ADF di-scan
-sekaligus ke folder LJK siswa (scan_0001.jpg, scan_0002.jpg, ...; file lama
+sekaligus ke folder LJK peserta (scan_0001.jpg, scan_0002.jpg, ...; file lama
 tidak ditimpa).
 - Pasang dulu driver scanner dari situs produsen (mis. Epson Scan 2 untuk
   Epson DS-410, driver Plustek untuk SmartOffice PS283).

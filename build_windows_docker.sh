@@ -7,9 +7,9 @@ TWAINDSM=""
 [ -f vendor/TWAINDSM.dll ] && TWAINDSM="--add-binary vendor/TWAINDSM.dll;."
 docker run --rm -v "$PWD":/src -w /src -e TWAINDSM="$TWAINDSM" tobix/pywine:3.12 bash -c '
   set -e
-  OPTS="--noupx --paths . --collect-submodules src --hidden-import openpyxl --hidden-import win32com.client
+  OPTS="--noupx --paths . --collect-submodules src --hidden-import openpyxl --hidden-import xlrd --hidden-import win32com.client
     --hidden-import pythoncom --hidden-import pywintypes --collect-data sv_ttk --icon assets/icon.ico
-    --add-data assets/icon.ico;assets --add-data assets/icon.png;assets --add-data assets/logo.png;assets $TWAINDSM"
+    --add-data assets/icon.ico;assets --add-data assets/icon.png;assets --add-data assets/logo.png;assets --add-data LICENSE;. --add-data LICENSE-OMRChecker-asli-MIT.txt;. $TWAINDSM"
   wine python -m pip install -q -r requirements.gui.txt -c requirements.wine-pins.txt
   wine pyinstaller --noconfirm --clean --onefile --windowed --name OMRChecker \
     --distpath dist --workpath build $OPTS gui.py

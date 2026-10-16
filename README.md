@@ -31,6 +31,7 @@ Aplikasi berjalan sepenuhnya di komputer Anda (luring). Tidak perlu memasang Pyt
 - **Kunci jawaban** per kode naskah dan per bagian, dengan bobot nilai per soal (mis. `1-10=2, 11-20=1`).
 - **Koreksi manual** hasil baca, daftar peserta dari Excel, dan analisis butir soal.
 - **Ekspor rekap ke Excel**: nilai per bagian, jawaban per soal, analisis butir, dan peserta yang tidak ikut.
+- **Buka ujian lama** dari folder hasilnya: kunci, koreksi, dan daftar peserta tetap tersimpan, sehingga rekap bisa diekspor ulang kapan saja.
 - **Tahan terhadap scan yang kurang rapi**: penyelarasan memakai kotak hitam di sudut LJK, lembar terbalik diputar otomatis, lembar terpotong atau kosong ditandai tanpa menggagalkan proses.
 
 ## Mulai cepat

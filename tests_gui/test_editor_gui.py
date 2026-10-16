@@ -282,7 +282,7 @@ def test_results_preview_follows_selection(root, tmp_path, monkeypatch):
         assert app.preview_name.get() != first and app.preview_name.get().endswith(".jpg")
         app.zoom_preview(1.25)
         app.zoom_preview(None)
-        nis_width = app.tree.column("NIS", "width")
+        nis_width = app.tree.column("NoPeserta", "width")  # suggested name of the 10-digit block
         assert nis_width >= 8 * 10  # 10 digits fit
     finally:
         app.destroy()

@@ -2,7 +2,7 @@
 
  OMRChecker wizard: the main window, step by step.
 
-   1 Template LJK   2 Kunci jawaban   3 Folder LJK siswa
+   1 Template LJK   2 Kunci jawaban   3 Folder LJK peserta
    4 Folder hasil   5 Proses & periksa   6 Rekap & ekspor
 
  Settings are kept between sessions (ujian.Exam). The previous main window
@@ -25,8 +25,13 @@ import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
 VERSION = "0.6.0"
-STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK siswa", "Folder hasil",
+STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
+PROJECT_URL = "https://github.com/budiperm/OMRChecker"
+RELEASES_URL = PROJECT_URL + "/releases"
+# (file put next to the exe by the installer, file bundled in the exe as a fallback)
+LICENSE_FILES = ("LISENSI.txt", "LICENSE")  # this program: GNU AGPL-3.0
+NOTICE_FILES = ("PEMBERITAHUAN-PIHAK-KETIGA.txt", "LICENSE-OMRChecker-asli-MIT.txt")  # upstream MIT and others
 SCAN_TYPES = (".jpg", ".jpeg", ".png", ".pdf")
 RED, BLUE = "#ffd7d5", "#dbe9ff"
 
@@ -340,7 +345,7 @@ class KeyStep(Step):
             ttk.Label(sc, text=label).pack(side="left", padx=(8, 2), pady=6)
             ttk.Entry(sc, textvariable=var, width=6).pack(side="left")
         ttk.Checkbutton(sc, text="Nilai dalam skala 0-100", variable=self.scale).pack(side="left", padx=16)
-        ttk.Label(sc, text="KKM (opsional):").pack(side="left")
+        ttk.Label(sc, text="Nilai batas lulus (opsional):").pack(side="left")
         ttk.Entry(sc, textvariable=self.kkm, width=6).pack(side="left", padx=4)
 
     def enter(self):
@@ -510,7 +515,7 @@ class KeyStep(Step):
             e.correct, e.incorrect, e.unmarked = (float(v.get().replace(",", ".")) for v in (self.correct, self.incorrect, self.unmarked))
             e.kkm = float(self.kkm.get().replace(",", ".")) if self.kkm.get().strip() else 0
         except ValueError:
-            messagebox.showerror(APP_TITLE, "Skor dan KKM harus angka.", parent=self)
+            messagebox.showerror(APP_TITLE, "Skor dan nilai batas lulus harus angka.", parent=self)
             return False
         e.scale_100 = self.scale.get()
         if self.mode.get() == "code":
@@ -552,9 +557,8 @@ def spaced(key, group=5):
 
 
 class ScansStep(Step):
-    title = "Folder LJK siswa & daftar siswa"
-    hint = ("Pilih folder berisi hasil scan (JPG/PNG/PDF; subfolder ikut dibaca), atau scan langsung dari scanner. "
-            "Daftar siswa opsional.")  # fmt: skip
+    title = "Folder LJK peserta & daftar peserta"
+    hint = "Pilih folder hasil scan (JPG/PNG/PDF, subfolder ikut dibaca) atau scan langsung. Daftar peserta opsional."
 
     def __init__(self, wizard):
         super().__init__(wizard)
@@ -572,7 +576,7 @@ class ScansStep(Step):
         self.files.pack(fill="both", expand=True, padx=6, pady=6)
         self.folder.trace_add("write", lambda *a: self.scan())
 
-        s = ttk.LabelFrame(self, text="Daftar siswa (opsional): nama & kelas diambil dari sini, siswa yang tidak ikut ketahuan")
+        s = ttk.LabelFrame(self, text="Daftar peserta (opsional): nama & kelompok diambil dari sini, peserta yang tidak ikut ketahuan")
         s.pack(fill="x", pady=(8, 0))
         row = ttk.Frame(s)
         row.pack(fill="x", padx=6, pady=6)
@@ -584,11 +588,12 @@ class ScansStep(Step):
         cols.pack(fill="x", padx=6, pady=(0, 6))
         self.col_vars = {}
         self.col_boxes = {}
-        for key, label in (("nis", "Kolom NIS"), ("nama", "Kolom Nama"), ("kelas", "Kolom Kelas")):
-            ttk.Label(cols, text=label).pack(side="left", padx=(0, 4))
+        for i, (key, label) in enumerate((("nis", "Kolom No. Peserta"), ("nama", "Kolom Nama"), ("kelas", "Kolom Kelompok"))):
+            ttk.Label(cols, text=label).grid(row=0, column=i, sticky="w", padx=(0, 12))
             var = tk.StringVar()
-            box = ttk.Combobox(cols, textvariable=var, state="readonly", width=18)
-            box.pack(side="left", padx=(0, 12))
+            box = ttk.Combobox(cols, textvariable=var, state="readonly", width=15)
+            box.grid(row=1, column=i, sticky="ew", padx=(0, 12))
+            cols.columnconfigure(i, weight=1, uniform="cols")
             self.col_vars[key], self.col_boxes[key] = var, box
         self.student_info = tk.StringVar()
         ttk.Label(s, textvariable=self.student_info, foreground=theme.MUTED).pack(anchor="w", padx=6, pady=(0, 6))
@@ -602,7 +607,7 @@ class ScansStep(Step):
                 self.col_vars[k].set(v)
 
     def pick(self):
-        d = filedialog.askdirectory(parent=self, title="Folder hasil scan LJK siswa", initialdir=self.folder.get() or None)
+        d = filedialog.askdirectory(parent=self, title="Folder hasil scan LJK peserta", initialdir=self.folder.get() or None)
         if d:
             self.folder.set(d)
 
@@ -633,7 +638,7 @@ class ScansStep(Step):
         self.count.set(f"{len(files)} file ditemukan ({len(files) - pdfs} gambar, {pdfs} PDF)" if self.folder.get() else "")
 
     def pick_students(self):
-        f = filedialog.askopenfilename(parent=self, title="Daftar siswa",
+        f = filedialog.askopenfilename(parent=self, title="Daftar peserta",
                                        filetypes=[("Excel / CSV", "*.xlsx *.xls *.csv"), ("Semua file", "*.*")])  # fmt: skip
         if f:
             self.students.set(f)
@@ -655,7 +660,7 @@ class ScansStep(Step):
             box["values"] = [""] + headers
             if self.col_vars[k].get() not in headers:
                 self.col_vars[k].set(guess.get(k, ""))
-        self.student_info.set(f"{len(rows)} baris di daftar siswa.")
+        self.student_info.set(f"{len(rows)} baris di daftar peserta.")
 
     def leave(self):
         folder = self.folder.get().strip()
@@ -673,12 +678,12 @@ class ScansStep(Step):
         cols = {k: v.get() for k, v in self.col_vars.items() if v.get()}
         if path:
             if not cols.get("nis") and not cols.get("nama"):
-                messagebox.showerror(APP_TITLE, "Pilih kolom NIS atau Nama di daftar siswa.", parent=self)
+                messagebox.showerror(APP_TITLE, "Pilih kolom No. Peserta atau Nama di daftar peserta.", parent=self)
                 return False
             try:
                 ujian.load_students(path, cols)
             except Exception as e:
-                messagebox.showerror(APP_TITLE, f"Daftar siswa tidak bisa dibaca:\n{e}", parent=self)
+                messagebox.showerror(APP_TITLE, f"Daftar peserta tidak bisa dibaca:\n{e}", parent=self)
                 return False
         self.exam.students_file, self.exam.students_cols = path, cols if path else {}
         return True
@@ -825,7 +830,7 @@ class ProcessStep(Step):
             self.split.sashpos(0, int(w * 0.6))
 
     def enter(self):
-        # never starts by itself: the teacher clicks "Proses LJK" when ready
+        # never starts by itself: the user clicks "Proses LJK" when ready
         self.total = len(scan_files(self.exam.scans_dir))
         self.load_results()
         if self.wizard.reprocess:
@@ -893,6 +898,7 @@ class ProcessStep(Step):
         self.wizard.set_busy(False)
         if ok:
             self.progress.configure(value=self.total)
+            self.exam.save(self.wizard.settings)  # ujian.json in the (new or emptied) output folder
             self.load_results()
             if not self.results:
                 messagebox.showwarning(
@@ -907,13 +913,13 @@ class ProcessStep(Step):
 
     def columns(self):
         """No, File, the template's identity fields (Nama from the student
-        list when there is one), Kelas, Benar, Nilai, Catatan."""
+        list when there is one), Kelompok, Benar, Nilai, Catatan."""
         ident = [c for c in self.wizard.template.columns]
         if "Nama" not in ident:
             ident.insert(0, "Nama")
         cols = [("No", 40), ("File", 150)] + [(c, 170 if c == "Nama" else 100) for c in ident]
         if self.wizard.students:
-            cols.append(("Kelas", 70))
+            cols.append(("Kelompok", 80))
         cols += [("Benar", 60), ("Nilai", 60), ("Catatan", 340)]
         return cols
 
@@ -922,7 +928,7 @@ class ProcessStep(Step):
         for c in [c for c, _ in self.columns()][2:]:
             if c == "Nama":
                 values.append(r.name)
-            elif c == "Kelas":
+            elif c == "Kelompok":
                 values.append(r.kelas)
             elif c == "Benar":
                 values.append(r.correct if r.grade is not None else "")
@@ -1102,7 +1108,7 @@ class CorrectionDialog(tk.Toplevel):
 
 class ExportStep(Step):
     title = "Rekap & ekspor"
-    hint = "Ekspor rekap ke Excel: nilai per bagian, jawaban per soal, analisis butir, siswa tidak ikut."
+    hint = "Ekspor rekap ke Excel: nilai per bagian, jawaban per soal, analisis butir, peserta tidak ikut."
 
     def __init__(self, wizard):
         super().__init__(wizard)
@@ -1146,7 +1152,7 @@ class ExportStep(Step):
         missing = ""
         if self.wizard.students:
             missing = f"   •   tidak ikut: {len(ujian.absent_students(results, self.wizard.students))}"
-        kkm = f"   •   tuntas (KKM {self.exam.kkm:g}): {s['tuntas']}" if self.exam.kkm else ""
+        kkm = f"   •   lulus (batas {self.exam.kkm:g}): {s['tuntas']}" if self.exam.kkm else ""
         self.stats.set(f"{s['peserta']} LJK   •   rata-rata {s['rata']}   •   tertinggi {s['tertinggi']}   "
                        f"•   terendah {s['terendah']}{kkm}{missing}   •   perlu dicek: {s['perlu_dicek']}")  # fmt: skip
         self.tree.delete(*self.tree.get_children())
@@ -1185,11 +1191,36 @@ class ExportStep(Step):
         if not messagebox.askyesno(APP_TITLE, "Mulai ujian baru dengan template yang sama?\n(Kunci, folder, dan koreksi dikosongkan.)", parent=self):
             return
         template = self.exam.template
-        self.wizard.exam = ujian.Exam(template=template)
-        for step in self.wizard.steps:
-            step.exam = self.wizard.exam
-        self.wizard.exam.save(self.wizard.settings)
+        self.wizard.set_exam(ujian.Exam(template=template))
         self.wizard.go(1)
+
+
+def install_dir():
+    """Folder of OMRChecker.exe (or of this file when run from source)."""
+    return Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+
+
+def license_text(files):
+    """Text of the first file found: next to the exe (installer), then bundled
+    in the exe (PyInstaller --add-data), then next to this file (source)."""
+    installed, bundled = files
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    for path in (install_dir() / installed, base / bundled, install_dir() / bundled):
+        if path.is_file():
+            return path.read_text(encoding="utf-8", errors="replace")
+    return f"Lihat {PROJECT_URL}"
+
+
+def show_text(parent, title, text):
+    win = tk.Toplevel(parent)
+    win.title(title)
+    win.geometry("640x480")
+    win.transient(parent)
+    box = tk.Text(win, wrap="word", font=theme.mono(win, 10), padx=12, pady=12)
+    box.insert("1.0", text)
+    box.configure(state="disabled")
+    box.pack(fill="both", expand=True)
+    ttk.Button(win, text="Tutup", command=win.destroy).pack(pady=8)
 
 
 def open_file(path, parent):
@@ -1290,7 +1321,10 @@ class Wizard(tk.Tk):
             anchor="w")  # fmt: skip
         self.stepper = theme.Stepper(side, STEPS, self.jump, width=250)
         self.stepper.pack(fill="x")
-        ttk.Button(side, text="Mode lanjutan", command=self.advanced).pack(side="bottom", anchor="w", padx=20, pady=20)
+        ttk.Button(side, text="Mode lanjutan", command=self.advanced).pack(side="bottom", anchor="w", padx=20, pady=(4, 20))
+        self.help_btn = ttk.Button(side, text="Bantuan", command=self.show_help_menu)
+        self.help_btn.pack(side="bottom", anchor="w", padx=20, pady=4)
+        ttk.Button(side, text="Buka ujian lama...", command=self.open_exam).pack(side="bottom", anchor="w", padx=20, pady=4)
 
         main = ttk.Frame(self)
         main.pack(side="left", fill="both", expand=True)
@@ -1382,6 +1416,67 @@ class Wizard(tk.Tk):
         return ujian.score_results(rows, errors, self.exam, self.template.sections, self.students,
                                    blank_source=self.template.source)  # fmt: skip
 
+    def set_exam(self, exam):
+        self.exam = exam
+        for step in self.steps:
+            step.exam = exam
+        exam.save(self.settings)
+
+    def open_exam(self):
+        """Reopen an exam checked earlier, from its output folder (ujian.json)."""
+        if self.busy:
+            return
+        folder = filedialog.askdirectory(parent=self, title="Pilih folder hasil ujian yang ingin dibuka")
+        if not folder:
+            return
+        try:
+            exam = ujian.open_exam(folder, self.library)
+            template = ujian.read_library_template(exam.template)
+        except (ValueError, OSError) as e:
+            messagebox.showerror(APP_TITLE, str(e), parent=self)
+            return
+        if Path(folder).resolve() != Path(self.exam.output_dir or ".").resolve():
+            if not self.ask_export_before_close("membuka ujian lain", "Buka tanpa ekspor"):
+                return
+        self.set_exam(exam)
+        self.template = template
+        self.reprocess = self.clear_old = False
+        self.reached = len(STEPS) - 1
+        self.go(len(STEPS) - 1)
+
+    def show_help_menu(self):
+        menu = tk.Menu(self, tearoff=False)
+        menu.add_command(label="Panduan (PDF)", command=self.open_guide)
+        menu.add_command(label="Buka folder data & log", command=lambda: open_file(ujian.app_data_dir(), self))
+        menu.add_separator()
+        menu.add_command(label="Tentang Pemindai LJK", command=self.about)
+        menu.update_idletasks()
+        b = self.help_btn
+        menu.tk_popup(b.winfo_rootx(), b.winfo_rooty() - menu.winfo_reqheight())
+
+    def open_guide(self):
+        guide = install_dir() / "PANDUAN.pdf"
+        if not guide.is_file():
+            messagebox.showinfo(APP_TITLE, "PANDUAN.pdf tidak ditemukan di folder program.\n"
+                                f"Unduh dari halaman rilis:\n{RELEASES_URL}", parent=self)  # fmt: skip
+            return
+        open_file(guide, self)
+
+    def about(self):
+        choice = ChoiceDialog.ask(
+            self, f"Pemindai LJK v{VERSION}",
+            "Pemeriksa Lembar Jawaban Komputer (LJK) untuk ujian sekolah, seleksi, dan tes perusahaan.\n"
+            "Perangkat lunak bebas dan sumber terbuka, lisensi GNU AGPL-3.0. Hak cipta (c) 2026 Budi Permadi.",
+            [("lisensi", "Lisensi (AGPL-3.0)", False), ("pihak", "Pemberitahuan pihak ketiga", False),
+             ("tutup", "Tutup", True)],
+            detail="Dibangun di atas OMRChecker karya Udayraj Deshmukh dan kontributor (lisensi MIT).\n"
+                   f"Kode sumber: {PROJECT_URL}",
+        )  # fmt: skip
+        if choice == "lisensi":
+            show_text(self, "Lisensi", license_text(LICENSE_FILES))
+        elif choice == "pihak":
+            show_text(self, "Pemberitahuan pihak ketiga", license_text(NOTICE_FILES))
+
     def advanced(self):
         import gui
 
@@ -1399,7 +1494,7 @@ class Wizard(tk.Tk):
         state = ujian.rekap_state(self.exam)
         return bool(state) and state != self.exam.exported_state
 
-    def ask_export_before_close(self):
+    def ask_export_before_close(self, action="menutup", go_on="Tutup tanpa ekspor"):
         """Offer the export when the rekap is missing or out of date. True = go on closing."""
         if not self.export_pending():
             return True
@@ -1407,13 +1502,13 @@ class Wizard(tk.Tk):
         if self.exam.exported_file:
             heading = "Rekap belum diperbarui"
             text = ("Ada perubahan sejak ekspor terakhir (koreksi, kunci jawaban, atau proses ulang). "
-                    "Ekspor ulang rekap sebelum menutup?")  # fmt: skip
+                    f"Ekspor ulang rekap sebelum {action}?")  # fmt: skip
             detail = f"Ekspor terakhir: {self.exam.exported_file}"
         else:
             heading = "Rekap nilai belum diekspor"
-            text = f"Hasil pemeriksaan {len(rows) + len(errors)} LJK belum disimpan ke Excel. Ekspor sekarang sebelum menutup?"
+            text = f"Hasil pemeriksaan {len(rows) + len(errors)} LJK belum disimpan ke Excel. Ekspor sekarang sebelum {action}?"
             detail = "Hasil tetap tersimpan di folder hasil dan bisa diekspor lain kali."
-        choice = ChoiceDialog.ask(self, heading, text, [("batal", "Batal", False), ("tutup", "Tutup tanpa ekspor", False),
+        choice = ChoiceDialog.ask(self, heading, text, [("batal", "Batal", False), ("tutup", go_on, False),
                                                         ("ekspor", "Ekspor ke Excel...", True)], detail)  # fmt: skip
         if choice == "ekspor":
             return self.steps[5].export(ask_open=False)

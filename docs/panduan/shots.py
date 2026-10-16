@@ -31,7 +31,7 @@ def main():
     blocks = label_like_user([*blocks], layout)
     template, _ = tb.build_template(blocks, sheet)
     lib = work / "lib"
-    ujian.save_to_library("LJK Ujian Sekolah", sheet, template, blocks, lib)
+    ujian.save_to_library("LJK Ujian Umum", sheet, template, blocks, lib)
     scans = work / "LJK IPA 9A"
     scans.mkdir(parents=True, exist_ok=True)
     for k in range(8):

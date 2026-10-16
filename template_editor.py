@@ -29,7 +29,7 @@ import theme
 
 KIND_LABELS = {
     tb.KIND_MCQ: "Soal pilihan ganda",
-    tb.KIND_DIGITS: "Angka 0-9 (NIS, kode, tanggal)",
+    tb.KIND_DIGITS: "Angka 0-9 (No. peserta, kode, tanggal)",
     tb.KIND_CUSTOM: "Pilihan khusus",
     tb.KIND_IGNORE: "Abaikan",
 }
@@ -39,7 +39,7 @@ KIND_COLORS = {
     tb.KIND_CUSTOM: "#bf8700",
     tb.KIND_IGNORE: "#8c959f",
 }
-GROUP_PRESETS = ["NIS", "NoPeserta", "KodeSoal", "TglLahir", "Kelas", "Ruang"]
+GROUP_PRESETS = ["NoPeserta", "NIS", "KodeSoal", "TglLahir", "Kelompok", "Kelas", "Ruang"]
 DIRECTION_LABELS = {True: "Kiri ke kanan (satu isian per baris)",
                     False: "Atas ke bawah (satu isian per kolom)"}  # fmt: skip
 TITLE = "Buat Template LJK"
@@ -476,7 +476,7 @@ class TemplateEditor(tk.Toplevel):
         self.values_var.set(", ".join(probe.values))
         self.dir_var.set(DIRECTION_LABELS[probe.horizontal])
         if kind != tb.KIND_MCQ and not self.group_var.get():
-            self.group_var.set("NIS" if b.cols >= 6 else "")
+            self.group_var.set("NoPeserta" if b.cols >= 6 else "")
         self.update_prop_visibility()
 
     def update_prop_visibility(self):
@@ -623,7 +623,7 @@ class TemplateEditor(tk.Toplevel):
             self.save_to_library(template)
             return
         folder = filedialog.askdirectory(
-            parent=self, title="Pilih folder ujian (tempat menaruh scan LJK siswa)"
+            parent=self, title="Pilih folder ujian (tempat menaruh scan LJK peserta)"
         )
         if not folder:
             return
@@ -641,7 +641,7 @@ class TemplateEditor(tk.Toplevel):
         messagebox.showinfo(
             TITLE,
             f"Template tersimpan di:\n{folder}\n\nFile: {', '.join(written)}\n\n"
-            "Taruh hasil scan LJK siswa di folder ini, lalu klik 'Proses LJK'.",
+            "Taruh hasil scan LJK peserta di folder ini, lalu klik 'Proses LJK'.",
             parent=self,
         )
         if self.on_saved:
