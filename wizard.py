@@ -20,6 +20,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
+import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
@@ -71,16 +72,16 @@ class ImagePreview(ttk.Frame):
         super().__init__(master)
         bar = ttk.Frame(self)
         bar.pack(fill="x")
-        ttk.Button(bar, text="−", width=3, command=lambda: self.zoom(1 / 1.25)).pack(side="left")
-        ttk.Button(bar, text="+", width=3, command=lambda: self.zoom(1.25)).pack(side="left")
-        ttk.Button(bar, text="Pas lebar", command=lambda: self.zoom(None)).pack(side="left", padx=4)
-        self.open_btn = ttk.Button(bar, text="Buka di aplikasi", command=self.open_external)
+        ttk.Button(bar, text="−", width=2, style="Small.TButton", command=lambda: self.zoom(1 / 1.25)).pack(side="left")
+        ttk.Button(bar, text="+", width=2, style="Small.TButton", command=lambda: self.zoom(1.25)).pack(side="left", padx=2)
+        ttk.Button(bar, text="Pas lebar", style="Small.TButton", command=lambda: self.zoom(None)).pack(side="left", padx=2)
+        self.open_btn = ttk.Button(bar, text="Buka di aplikasi", style="Small.TButton", command=self.open_external)
         self.open_btn.pack(side="left")
         self.caption = tk.StringVar(value=title)
-        ttk.Label(self, textvariable=self.caption, foreground="gray").pack(anchor="w")
+        ttk.Label(self, textvariable=self.caption, style="Muted.TLabel").pack(anchor="w")
         frame = ttk.Frame(self)
         frame.pack(fill="both", expand=True)
-        self.canvas = tk.Canvas(frame, background="#d0d7de", highlightthickness=0)
+        self.canvas = tk.Canvas(frame, background="#e4e8ee", highlightthickness=0)
         vs = ttk.Scrollbar(frame, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=vs.set)
         self.canvas.grid(row=0, column=0, sticky="nsew")
@@ -182,26 +183,30 @@ class TemplateStep(Step):
 
     def __init__(self, wizard):
         super().__init__(wizard)
+        # list 55 % / preview 45 %, whatever the column widths ask for
+        self.columnconfigure(0, weight=11, uniform="split")
+        self.columnconfigure(1, weight=9, uniform="split")
+        self.rowconfigure(0, weight=1)
         left = ttk.Frame(self)
-        left.pack(side="left", fill="both", expand=True, padx=(0, 8))
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
         self.tree = ttk.Treeview(left, columns=("soal", "dibuat"), show="tree headings", selectmode="browse")
         self.tree.heading("#0", text="Template")
         self.tree.heading("soal", text="Isi")
         self.tree.heading("dibuat", text="Dibuat")
-        self.tree.column("#0", width=220)
-        self.tree.column("soal", width=330)
-        self.tree.column("dibuat", width=120)
+        self.tree.column("#0", width=180)
+        self.tree.column("soal", width=200)
+        self.tree.column("dibuat", width=130, stretch=False)
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.on_select())
         self.tree.bind("<Double-1>", lambda e: self.wizard.next())
         bar = ttk.Frame(left)
         bar.pack(fill="x", pady=6)
-        ttk.Button(bar, text="Buat baru dari scan LJK kosong...", command=self.create).pack(side="left")
+        ttk.Button(bar, text="+  Buat baru dari LJK kosong...", command=self.create, style="Accent.TButton").pack(side="left")
         ttk.Button(bar, text="Edit...", command=self.edit).pack(side="left", padx=4)
-        ttk.Button(bar, text="Impor folder template lama...", command=self.import_old).pack(side="left")
+        ttk.Button(bar, text="Impor...", command=self.import_old).pack(side="left")
         ttk.Button(bar, text="Hapus", command=self.delete).pack(side="left", padx=4)
         self.preview = ImagePreview(self)
-        self.preview.pack(side="left", fill="both", expand=True)
+        self.preview.grid(row=0, column=1, sticky="nsew")
         self.templates = []
 
     def enter(self):
@@ -368,12 +373,12 @@ class KeyStep(Step):
                 tk.Label(row, image=photo, relief="solid", borderwidth=1).grid(row=0, column=0, rowspan=3, sticky="nw", padx=(0, 8))
             head = ttk.Frame(row)
             head.grid(row=0, column=1, sticky="ew")
-            ttk.Label(head, text=f"{name} ({len(labels)} soal)", font=("Segoe UI", 10, "bold")).pack(side="left")
+            ttk.Label(head, text=f"{name} ({len(labels)} soal)", style="Strong.TLabel").pack(side="left")
             if part and ujian.can_edit(template.path):
                 ttk.Button(head, text="Ganti nama...", command=lambda p=part: self.rename(p)).pack(side="left", padx=8)
             counter = tk.StringVar()
-            ttk.Label(head, textvariable=counter, foreground="gray").pack(side="right")
-            text = tk.Text(row, height=2, width=60, wrap="char", font=("Consolas", 11))
+            ttk.Label(head, textvariable=counter, style="Muted.TLabel").pack(side="right")
+            text = tk.Text(row, height=2, width=60, wrap="char", font=theme.mono(self, 11))
             text.grid(row=1, column=1, sticky="ew")
             text.bind("<KeyRelease>", lambda e, p=part: self.on_key_edit(p))
             weight = tk.StringVar(value=self.exam.weights.get(part, ""))
@@ -382,7 +387,7 @@ class KeyStep(Step):
             wrow.grid(row=2, column=1, sticky="ew", pady=(2, 0))
             ttk.Label(wrow, text="Bobot benar (opsional):").pack(side="left")
             ttk.Entry(wrow, textvariable=weight, width=30).pack(side="left", padx=4)
-            ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", foreground="gray").pack(side="left")
+            ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", style="Muted.TLabel").pack(side="left")
             row.columnconfigure(1, weight=1)
             self.texts[part], self.counters[part], self.weights[part] = text, counter, weight
         self.keys_frame.columnconfigure(0, weight=1)
@@ -586,7 +591,7 @@ class ScansStep(Step):
             box.pack(side="left", padx=(0, 12))
             self.col_vars[key], self.col_boxes[key] = var, box
         self.student_info = tk.StringVar()
-        ttk.Label(s, textvariable=self.student_info, foreground="gray").pack(anchor="w", padx=6, pady=(0, 6))
+        ttk.Label(s, textvariable=self.student_info, style="Muted.TLabel").pack(anchor="w", padx=6, pady=(0, 6))
         self.students.trace_add("write", lambda *a: self.read_students())
 
     def enter(self):
@@ -697,7 +702,7 @@ class OutputStep(Step):
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
         self.existing = tk.StringVar()
-        ttk.Label(f, textvariable=self.existing, foreground="#9a6700").pack(anchor="w", padx=6)
+        ttk.Label(f, textvariable=self.existing, style="Warn.TLabel").pack(anchor="w", padx=6)
         self.policy = tk.StringVar(value="replace")
         self.replace_rb = ttk.Radiobutton(f, text="Hapus hasil lama lalu proses ulang", variable=self.policy, value="replace")
         self.new_rb = ttk.Radiobutton(f, text="Simpan di subfolder baru (tanggal & jam)", variable=self.policy, value="new")
@@ -772,7 +777,7 @@ class ProcessStep(Step):
         super().__init__(wizard)
         top = ttk.Frame(self)
         top.pack(fill="x")
-        self.run_btn = ttk.Button(top, text="▶  Proses LJK", command=self.start)
+        self.run_btn = ttk.Button(top, text="▶  Proses LJK", command=self.start, style="Accent.TButton")
         self.run_btn.pack(side="left")
         self.stop_btn = ttk.Button(top, text="■  Stop", command=self.stop, state="disabled")
         self.stop_btn.pack(side="left", padx=4)
@@ -820,12 +825,12 @@ class ProcessStep(Step):
             self.split.sashpos(0, int(w * 0.6))
 
     def enter(self):
+        # never starts by itself: the teacher clicks "Proses LJK" when ready
         self.total = len(scan_files(self.exam.scans_dir))
+        self.load_results()
         if self.wizard.reprocess:
-            self.load_results()
-            self.after(100, self.start)
-        else:
-            self.load_results()
+            old = " Hasil lama di folder ini akan diganti." if self.results and self.wizard.clear_old else ""
+            self.summary.set(f"Siap memeriksa {self.total} LJK. Klik '▶ Proses LJK' untuk mulai.{old}")
 
     def start(self):
         if self.proc and self.proc.is_alive():
@@ -982,7 +987,7 @@ class ProcessStep(Step):
         win = tk.Toplevel(self)
         win.title("Log proses")
         win.geometry("900x500")
-        text = tk.Text(win, wrap="none", font=("Consolas", 9))
+        text = tk.Text(win, wrap="none", font=theme.mono(self, 9))
         text.insert("1.0", "".join(self.log) or "Belum ada log.")
         text.pack(fill="both", expand=True)
 
@@ -1035,11 +1040,11 @@ class CorrectionDialog(tk.Toplevel):
         # Buttons first, at the bottom, so a tall sheet never pushes them off-screen
         bar = ttk.Frame(self)
         bar.pack(side="bottom", fill="x", padx=8, pady=8)
-        ttk.Button(bar, text="Simpan koreksi", command=self.save).pack(side="right")
+        ttk.Button(bar, text="Simpan koreksi", command=self.save, style="Accent.TButton").pack(side="right")
         ttk.Button(bar, text="Batal", command=self.destroy).pack(side="right", padx=4)
         ttk.Button(bar, text="Kembalikan ke hasil scan", command=self.revert).pack(side="left")
         ttk.Label(self, text="Ubah yang salah baca. '-' = kosong, (AC) = lebih dari satu tanda.",
-                  foreground="gray").pack(anchor="w", padx=8, pady=6)  # fmt: skip
+                  style="Muted.TLabel").pack(anchor="w", padx=8, pady=6)  # fmt: skip
         ident = ttk.LabelFrame(self, text="Identitas")
         ident.pack(fill="x", padx=8)
         self.fields = {}
@@ -1056,7 +1061,7 @@ class CorrectionDialog(tk.Toplevel):
         self.texts = {}
         for part, labels in sections.items():
             ttk.Label(ans, text=f"Bagian {part} ({len(labels)} soal)" if part else f"Jawaban ({len(labels)} soal)").pack(anchor="w", padx=4)
-            t = tk.Text(ans, height=3, wrap="word", font=("Consolas", 10))
+            t = tk.Text(ans, height=3, wrap="word", font=theme.mono(self, 10))
             t.insert("1.0", answers_text(result.answers, labels))
             t.pack(fill="x", padx=4, pady=(0, 6))
             self.texts[part] = t
@@ -1102,7 +1107,7 @@ class ExportStep(Step):
     def __init__(self, wizard):
         super().__init__(wizard)
         self.stats = tk.StringVar()
-        ttk.Label(self, textvariable=self.stats, font=("Segoe UI", 11)).pack(anchor="w", pady=(0, 6))
+        ttk.Label(self, textvariable=self.stats, style="Big.TLabel").pack(anchor="w", pady=(0, 6))
         f = ttk.LabelFrame(self, text="Analisis butir soal")
         f.pack(fill="both", expand=True)
         cols = ("soal", "kunci", "bobot", "benar", "kategori", "A", "B", "C", "D", "E", "Kosong", "Ganda")
@@ -1116,7 +1121,7 @@ class ExportStep(Step):
         vs.pack(side="left", fill="y")
         bar = ttk.Frame(self)
         bar.pack(fill="x", pady=8)
-        ttk.Button(bar, text="Ekspor ke Excel...", command=self.export).pack(side="left")
+        ttk.Button(bar, text="Ekspor ke Excel...", command=self.export, style="Accent.TButton").pack(side="left")
         ttk.Button(bar, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="left", padx=6)
         ttk.Button(bar, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
 
@@ -1174,6 +1179,7 @@ class ExportStep(Step):
 class Wizard(tk.Tk):
     def __init__(self, library=None, settings=None):
         super().__init__()
+        theme.apply(self)
         self.title(f"{APP_TITLE} v{VERSION}")
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         width, height = min(1200, sw - 40), min(800, sh - 90)  # leave room for the taskbar
@@ -1183,7 +1189,7 @@ class Wizard(tk.Tk):
                 self.state("zoomed")
             except tk.TclError:
                 pass
-        self.minsize(980, 640)
+        self.minsize(1080, 660)
         self.library = Path(library or ujian.library_dir())
         self.settings = settings
         self.exam = ujian.Exam.load(settings)
@@ -1193,29 +1199,37 @@ class Wizard(tk.Tk):
         self.clear_old = False
         self.busy = False
 
-        head = ttk.Frame(self)
-        head.pack(fill="x", padx=12, pady=(10, 0))
-        self.step_labels = []
-        for i, name in enumerate(STEPS):
-            lbl = tk.Label(head, text=f" {i + 1}. {name} ", padx=8, pady=4, relief="flat", cursor="hand2")
-            lbl.pack(side="left", padx=(0, 4))
-            lbl.bind("<Button-1>", lambda e, i=i: self.jump(i))
-            self.step_labels.append(lbl)
-        ttk.Button(head, text="Mode lanjutan", command=self.advanced).pack(side="right")
+        # sidebar: app name and the steps
+        side = ttk.Frame(self, style="Side.TFrame", width=250)
+        side.pack(side="left", fill="y")
+        side.pack_propagate(False)
+        tk.Label(side, text="Pemindai LJK", bg=theme.SIDEBAR, fg=theme.FG, font="SunValleySubtitleFont").pack(
+            anchor="w", padx=22, pady=(24, 0))  # fmt: skip
+        tk.Label(side, text=f"OMRChecker v{VERSION}", bg=theme.SIDEBAR, fg=theme.MUTED, font="SunValleyCaptionFont").pack(
+            anchor="w", padx=22, pady=(0, 20))  # fmt: skip
+        self.stepper = theme.Stepper(side, STEPS, self.jump, width=250)
+        self.stepper.pack(fill="x")
+        ttk.Button(side, text="Mode lanjutan", command=self.advanced).pack(side="bottom", anchor="w", padx=20, pady=20)
 
+        main = ttk.Frame(self)
+        main.pack(side="left", fill="both", expand=True)
+        self.eyebrow = tk.StringVar()
         self.heading = tk.StringVar()
         self.hint = tk.StringVar()
-        ttk.Label(self, textvariable=self.heading, font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=12, pady=(10, 0))
-        ttk.Label(self, textvariable=self.hint, foreground="gray").pack(anchor="w", padx=12)
-        self.body = ttk.Frame(self)
-        self.body.pack(fill="both", expand=True, padx=12, pady=8)
+        ttk.Label(main, textvariable=self.eyebrow, style="Eyebrow.TLabel").pack(anchor="w", padx=28, pady=(22, 0))
+        ttk.Label(main, textvariable=self.heading, style="Title.TLabel").pack(anchor="w", padx=28)
+        ttk.Label(main, textvariable=self.hint, style="Muted.TLabel").pack(anchor="w", padx=28, pady=(2, 0))
 
-        foot = ttk.Frame(self)
-        foot.pack(fill="x", padx=12, pady=(0, 10))
-        self.back_btn = ttk.Button(foot, text="◀  Kembali", command=self.back)
-        self.back_btn.pack(side="left")
-        self.next_btn = ttk.Button(foot, text="Lanjut  ▶", command=self.next)
-        self.next_btn.pack(side="right")
+        foot = ttk.Frame(main, style="Footer.TFrame")
+        foot.pack(side="bottom", fill="x")
+        ttk.Separator(foot).pack(fill="x")
+        self.back_btn = ttk.Button(foot, text="←  Kembali", command=self.back)
+        self.back_btn.pack(side="left", padx=28, pady=12)
+        self.next_btn = ttk.Button(foot, text="Lanjut  →", command=self.next, style="Accent.TButton")
+        self.next_btn.pack(side="right", padx=28, pady=12)
+
+        self.body = ttk.Frame(main)
+        self.body.pack(fill="both", expand=True, padx=28, pady=(14, 14))
 
         self.steps = [cls(self) for cls in (TemplateStep, KeyStep, ScansStep, OutputStep, ProcessStep, ExportStep)]
         self.current = None
@@ -1230,18 +1244,13 @@ class Wizard(tk.Tk):
         self.current = i
         self.reached = max(self.reached, i)
         step = self.steps[i]
-        self.heading.set(f"Langkah {i + 1} dari {len(STEPS)}: {step.title}")
+        self.eyebrow.set(f"LANGKAH {i + 1} DARI {len(STEPS)}")
+        self.heading.set(step.title)
         self.hint.set(step.hint)
         step.pack(fill="both", expand=True)
         self.back_btn.configure(state="normal" if i > 0 else "disabled")
-        self.next_btn.configure(text="Selesai" if i == len(STEPS) - 1 else "Lanjut  ▶")
-        for k, lbl in enumerate(self.step_labels):
-            if k == i:
-                lbl.configure(bg="#1f6feb", fg="white")
-            elif k <= self.reached:
-                lbl.configure(bg="#dbe9ff", fg="#0b3d91")
-            else:
-                lbl.configure(bg="#eaeef2", fg="#57606a")
+        self.next_btn.configure(text="Selesai" if i == len(STEPS) - 1 else "Lanjut  →")
+        self.stepper.set(i, self.reached)
         step.enter()
 
     def next(self):

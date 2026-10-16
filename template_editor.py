@@ -99,14 +99,14 @@ class TemplateEditor(tk.Toplevel):
             side="left"
         )
         ttk.Button(top, text="Deteksi ulang", command=self.detect).pack(side="left", padx=6)
-        ttk.Button(top, text="−", width=3, command=lambda: self.set_zoom(self.zoom / 1.25)).pack(
+        ttk.Button(top, text="−", width=2, style="Small.TButton", command=lambda: self.set_zoom(self.zoom / 1.25)).pack(
             side="left", padx=(16, 0)
         )
-        ttk.Button(top, text="+", width=3, command=lambda: self.set_zoom(self.zoom * 1.25)).pack(
+        ttk.Button(top, text="+", width=2, style="Small.TButton", command=lambda: self.set_zoom(self.zoom * 1.25)).pack(
             side="left"
         )
-        ttk.Button(top, text="Pas layar", command=self.fit_zoom).pack(side="left", padx=4)
-        ttk.Label(top, textvariable=self.status_var, foreground="#555").pack(
+        ttk.Button(top, text="Pas layar", style="Small.TButton", command=self.fit_zoom).pack(side="left", padx=4)
+        ttk.Label(top, textvariable=self.status_var, style="Muted.TLabel").pack(
             side="left", padx=12
         )
 
@@ -115,7 +115,7 @@ class TemplateEditor(tk.Toplevel):
 
         # Canvas
         cv_frame = ttk.Frame(body)
-        self.canvas = tk.Canvas(cv_frame, background="#d0d7de", highlightthickness=0)
+        self.canvas = tk.Canvas(cv_frame, background="#e4e8ee", highlightthickness=0)
         vsb = ttk.Scrollbar(cv_frame, orient="vertical", command=self.canvas.yview)
         hsb = ttk.Scrollbar(cv_frame, orient="horizontal", command=self.canvas.xview)
         self.canvas.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -159,7 +159,7 @@ class TemplateEditor(tk.Toplevel):
         ttk.Label(
             lst,
             text="Tarik kotak di gambar untuk membuat blok baru.",
-            foreground="#555",
+            style="Muted.TLabel",
         ).pack(anchor="w", padx=4, pady=(0, 4))
 
         prop = ttk.LabelFrame(side, text="Isi blok terpilih")
@@ -191,7 +191,7 @@ class TemplateEditor(tk.Toplevel):
             prop, textvariable=self.dir_var, values=list(DIRECTION_LABELS.values()), state="readonly"
         )
         self.dir_box.grid(row=6, column=1, sticky="ew", **pad)
-        ttk.Button(prop, text="Terapkan", command=self.apply_props).grid(
+        ttk.Button(prop, text="Terapkan", command=self.apply_props, style="Accent.TButton").grid(
             row=7, column=1, sticky="e", **pad
         )
         ttk.Label(
@@ -199,13 +199,13 @@ class TemplateEditor(tk.Toplevel):
             text="Blok dengan nama kolom sama digabung berurutan\n"
             "(mis. TGL, BLN, THN → TglLahir). Nomor soal mulai\n"
             "dari 1 lagi di setiap bagian (I, II, Motivasi, ...).",
-            foreground="#555",
+            style="Muted.TLabel",
         ).grid(row=8, column=0, columnspan=2, sticky="w", **pad)
 
         key = ttk.LabelFrame(side, text="3. Kunci jawaban (opsional)")
-        self.key_text = tk.Text(key, height=3, width=36, wrap="word", font=("Consolas", 10))
+        self.key_text = tk.Text(key, height=3, width=36, wrap="word", font="TkFixedFont")
         self.key_text.pack(fill="x", padx=4, pady=4)
-        ttk.Label(key, text="Contoh: ABCDE ABCDE ... atau 1A 2B 3C", foreground="#555").pack(
+        ttk.Label(key, text="Contoh: ABCDE ABCDE ... atau 1A 2B 3C", style="Muted.TLabel").pack(
             anchor="w", padx=4
         )
         sc = ttk.Frame(key)
@@ -217,7 +217,7 @@ class TemplateEditor(tk.Toplevel):
 
         act = ttk.LabelFrame(side, text="3. Simpan" if self.library else "4. Simpan")
         save_text = "Simpan ke pustaka template..." if self.library else "Simpan template ke folder ujian..."
-        ttk.Button(act, text=save_text, command=self.save).pack(fill="x", padx=4, pady=4)
+        ttk.Button(act, text=save_text, command=self.save, style="Accent.TButton").pack(fill="x", padx=4, pady=4)
         ttk.Button(act, text="Uji dengan LJK terisi...", command=self.test_with_scan).pack(
             fill="x", padx=4, pady=(0, 4)
         )
@@ -765,7 +765,7 @@ def show_text(master, title, text, image=None):
     win = tk.Toplevel(master)
     win.title(title)
     win.geometry("560x600")
-    box = tk.Text(win, wrap="none", font=("Consolas", 10))
+    box = tk.Text(win, wrap="none", font="TkFixedFont")
     box.insert("1.0", text)
     box.configure(state="disabled")
     box.pack(fill="both", expand=True, padx=8, pady=8)

@@ -47,7 +47,7 @@ class ScanDialog(tk.Toplevel):
         self.refresh_btn = ttk.Button(f, text="Cari ulang", command=self.find)
         self.refresh_btn.grid(row=0, column=2, padx=(6, 0))
         self.device_info = tk.StringVar()
-        ttk.Label(f, textvariable=self.device_info, foreground="gray", wraplength=520, justify="left").grid(
+        ttk.Label(f, textvariable=self.device_info, style="Muted.TLabel", wraplength=520, justify="left").grid(
             row=1, column=1, columnspan=2, sticky="w")  # fmt: skip
 
         ttk.Label(f, text="Sumber").grid(row=2, column=0, sticky="nw", pady=(8, 3))
@@ -84,7 +84,7 @@ class ScanDialog(tk.Toplevel):
 
         ttk.Label(f, text="Simpan ke").grid(row=6, column=0, sticky="nw", pady=(8, 3))
         ttk.Label(f, text=f"{folder}\n(nama file scan_0001.jpg, scan_0002.jpg, ...; file lama tidak ditimpa)",
-                  foreground="gray", wraplength=520, justify="left").grid(row=6, column=1, columnspan=2, sticky="w",
+                  style="Muted.TLabel", wraplength=520, justify="left").grid(row=6, column=1, columnspan=2, sticky="w",
                                                                           pady=(8, 3))  # fmt: skip
 
         ttk.Separator(f).grid(row=7, column=0, columnspan=3, sticky="we", pady=10)
@@ -93,7 +93,7 @@ class ScanDialog(tk.Toplevel):
                                                                                    sticky="w")  # fmt: skip
         bar = ttk.Frame(f)
         bar.grid(row=9, column=0, columnspan=3, sticky="e", pady=(10, 0))
-        self.start_btn = ttk.Button(bar, text="Mulai scan", command=self.start)
+        self.start_btn = ttk.Button(bar, text="Mulai scan", command=self.start, style="Accent.TButton")
         self.start_btn.pack(side="left")
         self.stop_btn = ttk.Button(bar, text="Berhenti", command=self.stop, state="disabled")
         self.stop_btn.pack(side="left", padx=6)

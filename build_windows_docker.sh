@@ -8,7 +8,7 @@ TWAINDSM=""
 docker run --rm -v "$PWD":/src -w /src -e TWAINDSM="$TWAINDSM" tobix/pywine:3.12 bash -c '
   set -e
   OPTS="--noupx --paths . --collect-submodules src --hidden-import openpyxl --hidden-import win32com.client
-    --hidden-import pythoncom --hidden-import pywintypes $TWAINDSM"
+    --hidden-import pythoncom --hidden-import pywintypes --collect-data sv_ttk $TWAINDSM"
   wine python -m pip install -q -r requirements.gui.txt -c requirements.wine-pins.txt
   wine pyinstaller --noconfirm --clean --onefile --windowed --name OMRChecker \
     --distpath dist --workpath build $OPTS gui.py

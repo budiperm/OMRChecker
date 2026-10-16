@@ -2,4 +2,5 @@
 opencv-python>=4.8
 openpyxl>=3.1
 pyinstaller>=6.10
+sv-ttk>=2.6
 pywin32>=306; sys_platform == "win32"
