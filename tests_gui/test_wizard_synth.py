@@ -84,6 +84,7 @@ def test_process_step_waits_for_click(setup, monkeypatch):
         pump(w, 10)
         assert step.proc is None and not step.results, "processing must not start by itself"
         assert "Klik" in step.summary.get() and "3 LJK" in step.summary.get()
+        assert step.progress_text.get() == "3 LJK akan diproses"  # the count shows before the click
 
         step.run_btn.invoke()
         assert step.proc is not None
@@ -493,6 +494,42 @@ def test_remember_folder_checkboxes(setup, monkeypatch):
         pump(w)
         assert w.steps[2].remember.var.get() and w.steps[3].remember.var.get()
         assert w.exam.scans_dir == str(scans) and w.exam.output_dir == str(hasil)
+    finally:
+        w.destroy()
+
+
+def test_archive_old_scans(setup, monkeypatch):
+    """Step 3 'Arsipkan scan lama': the scans move to _arsip/<date time> (not
+    deleted, not read again), corrections are dropped and step 4 then
+    replaces the old results, so a re-scan does not double up."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    asked = []
+    monkeypatch.setattr(wz.ChoiceDialog, "ask", classmethod(lambda cls, *a, **k: asked.append(a) or "arsip"))
+    hasil = tmp / "hasil"
+    (hasil / "Results").mkdir(parents=True)
+    (hasil / "Results" / "Results_01PM.csv").write_text("file_id\n")
+    ujian.Exam(scans_dir=str(scans), output_dir=str(hasil), corrections={"siswa_1.jpg": {"q1": "B"}}).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        w.go(2)
+        step = w.steps[2]
+        assert step.count.get().startswith("3 file") and str(step.archive_btn["state"]) == "normal"
+        step.archive_btn.invoke()
+        assert "3 file scan" in asked[0][2]
+        archived = list((scans / wz.ARCHIVE_DIR).rglob("*.jpg"))
+        assert len(archived) == 3 and not list(scans.glob("*.jpg"))
+        assert wz.scan_files(scans) == [] and step.count.get().startswith("0 file")
+        assert str(step.archive_btn["state"]) == "disabled" and w.exam.corrections == {}
+
+        # the re-scan lands in the same folder; old results get replaced in step 4
+        (scans / "scan_0001.jpg").write_bytes(archived[0].read_bytes())
+        step.scan()
+        w.steps[3].policy.set("keep")
+        w.next()
+        assert w.current == 3 and w.steps[3].policy.get() == "replace"
     finally:
         w.destroy()
 

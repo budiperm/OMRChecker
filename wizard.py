@@ -13,6 +13,7 @@
 import base64
 import multiprocessing as mp
 import queue
+import shutil
 import subprocess
 import sys
 import time
@@ -24,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -33,6 +34,7 @@ RELEASES_URL = PROJECT_URL + "/releases"
 LICENSE_FILES = ("LISENSI.txt", "LICENSE")  # this program: GNU AGPL-3.0
 NOTICE_FILES = ("PEMBERITAHUAN-PIHAK-KETIGA.txt", "LICENSE-OMRChecker-asli-MIT.txt")  # upstream MIT and others
 SCAN_TYPES = (".jpg", ".jpeg", ".png", ".pdf")
+ARCHIVE_DIR = "_arsip"  # old scans moved here by "Arsipkan scan lama"; never read
 RED, BLUE = "#ffd7d5", "#dbe9ff"
 
 
@@ -41,7 +43,8 @@ def scan_files(folder):
     if not folder.is_dir():
         return []
     return sorted(
-        (p for p in folder.rglob("*") if p.suffix.lower() in SCAN_TYPES and p.is_file()),
+        (p for p in folder.rglob("*")
+         if p.suffix.lower() in SCAN_TYPES and p.is_file() and ARCHIVE_DIR not in p.relative_to(folder).parts),
         key=lambda p: ujian.natural_key(str(p.relative_to(folder))),
     )
 
@@ -602,6 +605,8 @@ class ScansStep(Step):
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
         ttk.Button(row, text="Scan dari scanner...", command=self.scan_paper).pack(side="left")
+        self.archive_btn = ttk.Button(row, text="Arsipkan scan lama...", command=self.archive)
+        self.archive_btn.pack(side="left", padx=(4, 0))
         self.remember = remember_box(f, wizard, ujian.PREF_SCANS)
         self.count = tk.StringVar()
         ttk.Label(f, textvariable=self.count).pack(anchor="w", padx=6)
@@ -669,6 +674,40 @@ class ScansStep(Step):
             self.files.insert("end", str(p.relative_to(self.folder.get())))
         pdfs = sum(p.suffix.lower() == ".pdf" for p in files)
         self.count.set(f"{len(files)} file ditemukan ({len(files) - pdfs} gambar, {pdfs} PDF)" if self.folder.get() else "")
+        self.archive_btn.configure(state="normal" if files else "disabled")
+
+    def archive(self):
+        """Move the scans out of the way (into _arsip/<date time>) so a re-scan
+        starts clean, and make the next run replace the old results."""
+        folder = self.folder.get().strip()
+        files = scan_files(folder)
+        if not files:
+            return
+        stamp = time.strftime("%Y-%m-%d %H.%M.%S")
+        dest = Path(folder) / ARCHIVE_DIR / stamp
+        choice = ChoiceDialog.ask(
+            self, "Arsipkan scan lama?",
+            f"{len(files)} file scan di folder ini akan dipindah ke subfolder {ARCHIVE_DIR}\\{stamp}.",
+            [("batal", "Batal", False), ("arsip", "Arsipkan", True)],
+            detail="File tidak dihapus dan tidak ikut diproses lagi. Hasil pemeriksaan lama akan diganti "
+                   "saat LJK diproses ulang.",
+        )  # fmt: skip
+        if choice != "arsip":
+            return
+        moved = 0
+        try:
+            for p in files:
+                target = dest / p.relative_to(folder)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(p), str(target))
+                moved += 1
+        except OSError as e:
+            messagebox.showerror(APP_TITLE, f"Gagal memindahkan file scan ({moved} dari {len(files)} sudah dipindah):\n{e}",
+                                 parent=self)  # fmt: skip
+        self.scan()
+        if moved:
+            self.exam.corrections = {}  # keyed by file name: a new scan_0001.jpg is another sheet
+            self.wizard.scans_archived = True
 
     def pick_students(self):
         f = filedialog.askopenfilename(parent=self, title="Daftar peserta",
@@ -754,6 +793,8 @@ class OutputStep(Step):
         default = str(Path(e.scans_dir).parent / (Path(e.scans_dir).name + "_hasil"))
         self.folder.set(e.output_dir or default)
         self.name.set(e.name or Path(e.scans_dir).name)
+        if self.wizard.scans_archived:  # results of the archived scans would double up
+            self.policy.set("replace")
 
     def pick(self):
         d = filedialog.askdirectory(parent=self, title="Folder hasil")
@@ -806,6 +847,7 @@ class OutputStep(Step):
         self.exam.output_dir = str(out_p)
         self.exam.name = self.name.get().strip()
         self.wizard.clear_old = self.has_results() and self.policy.get() == "replace"
+        self.wizard.scans_archived = False
         return True
 
 
@@ -868,6 +910,10 @@ class ProcessStep(Step):
         # never starts by itself: the user clicks "Proses LJK" when ready
         self.total = ujian.count_sheets(scan_files(self.exam.scans_dir))
         self.load_results()
+        if self.proc is None:  # how many sheets there are, before anything runs
+            self.progress.configure(maximum=max(1, self.total), value=0)
+            self.progress_text.set(f"{self.total} LJK akan diproses" if self.wizard.reprocess
+                                   else f"{self.total} LJK di folder scan")  # fmt: skip
         if self.wizard.reprocess:
             old = " Hasil lama di folder ini akan diganti." if self.results and self.wizard.clear_old else ""
             self.summary.set(f"Siap memeriksa {self.total} LJK. Klik '▶ Proses LJK' untuk mulai.{old}")
@@ -875,8 +921,6 @@ class ProcessStep(Step):
     def start(self):
         if self.proc and self.proc.is_alive():
             return
-        import shutil
-
         import gui
 
         out = Path(self.exam.output_dir)
@@ -1406,6 +1450,7 @@ class Wizard(tk.Tk):
         self.students = []
         self.reprocess = False
         self.clear_old = False
+        self.scans_archived = False  # step 3 archived the scans: old results must be replaced
         self.busy = False
 
         # sidebar: app name and the steps
