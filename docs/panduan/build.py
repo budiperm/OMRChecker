@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")

@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 EXAM_FILE = "ujian.json"  # exam settings kept in its output folder
+ARCHIVE_DIR = "_arsip"  # archived scans (and their results): same as src.constants ARCHIVE_DIRNAME
 ALL_CODES = "*"  # key used for every sheet when there is no exam-code column
 OPTIONS_ORDER = ["A", "B", "C", "D", "E"]
 
@@ -573,6 +574,11 @@ def parse_key(text):
 # ---------------------------------------------------------------------------
 
 
+def current(out, pattern):
+    """out.rglob(pattern) without anything under an archive folder."""
+    return [f for f in out.rglob(pattern) if ARCHIVE_DIR not in f.relative_to(out).parts]
+
+
 def read_results(output_dir):
     """Rows from every Results_*.csv under output_dir (newest wins per file),
     plus rows of sheets that could not be read (Manual/ErrorFiles.csv)."""
@@ -580,12 +586,12 @@ def read_results(output_dir):
     rows, errors = {}, {}
     if not out.is_dir():
         return [], []
-    files = sorted(out.rglob("Results/Results_*.csv"), key=lambda p: p.stat().st_mtime)
+    files = sorted(current(out, "Results/Results_*.csv"), key=lambda p: p.stat().st_mtime)
     for f in files:
         with open(f, newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh):
                 rows[(f.parent.parent, r["file_id"])] = r
-    for f in out.rglob("Manual/ErrorFiles.csv"):
+    for f in current(out, "Manual/ErrorFiles.csv"):
         with open(f, newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh):
                 errors[(f.parent.parent, r["file_id"])] = r
@@ -602,7 +608,7 @@ def done_sheets(output_dir):
         return []
     done = set()
     for pattern in ("Results/Results_*.csv", "Manual/ErrorFiles.csv"):
-        for f in out.rglob(pattern):
+        for f in current(out, pattern):
             rel = f.parent.parent.relative_to(out).as_posix()
             with open(f, newline="", encoding="utf-8") as fh:
                 done.update((rel, r["file_id"]) for r in csv.DictReader(fh) if r.get("file_id"))

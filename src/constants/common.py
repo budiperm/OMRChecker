@@ -12,6 +12,8 @@ from dotmap import DotMap
 TEMPLATE_FILENAME = "template.json"
 EVALUATION_FILENAME = "evaluation.json"
 CONFIG_FILENAME = "config.json"
+# old scans moved aside by the wizard ("Arsipkan scan lama"): never processed
+ARCHIVE_DIRNAME = "_arsip"
 
 FIELD_LABEL_NUMBER_REGEX = r"([^\d]+)(\d*)"
 #
