@@ -16,6 +16,7 @@ import pandas as pd
 from rich.table import Table
 
 from src.constants.common import (
+    ARCHIVE_DIRNAME,
     CONFIG_FILENAME,
     ERROR_CODES,
     EVALUATION_FILENAME,
@@ -98,7 +99,7 @@ def process_dir(
             tuning_config,
         )
     # Look for subdirectories for processing
-    subdirs = [d for d in curr_dir.iterdir() if d.is_dir()]
+    subdirs = [d for d in curr_dir.iterdir() if d.is_dir() and d.name != ARCHIVE_DIRNAME]
 
     output_dir = Path(args["output_dir"], curr_dir.relative_to(root_dir))
     paths = Paths(output_dir)

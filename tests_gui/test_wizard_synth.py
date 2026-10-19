@@ -514,7 +514,12 @@ def test_archive_old_scans(setup, monkeypatch):
     w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
     try:
         pump(w)
-        w.go(2)
+        w.next()
+        for part, text in w.steps[1].texts.items():
+            text.insert("1.0", "A" * len(w.template.sections[part]))
+            w.steps[1].on_key_edit(part)
+        w.next()
+        assert w.current == 2
         step = w.steps[2]
         assert step.count.get().startswith("3 file") and str(step.archive_btn["state"]) == "normal"
         step.archive_btn.invoke()
@@ -530,6 +535,20 @@ def test_archive_old_scans(setup, monkeypatch):
         w.steps[3].policy.set("keep")
         w.next()
         assert w.current == 3 and w.steps[3].policy.get() == "replace"
+
+        # only the new scan is read: the archived ones are skipped by the run too
+        w.next()
+        step = w.steps[4]
+        assert w.current == 4 and step.progress_text.get() == "1 LJK akan diproses"
+        step.run_btn.invoke()
+        deadline = time.time() + 300
+        while step.proc is not None:
+            w.update()
+            time.sleep(0.05)
+            assert time.time() < deadline, "processing did not finish"
+        pump(w, 20)
+        assert [r.file_id for r in step.results] == ["scan_0001.jpg"]
+        assert not list(hasil.rglob(wz.ARCHIVE_DIR))
     finally:
         w.destroy()
 

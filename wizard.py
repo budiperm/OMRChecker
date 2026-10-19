@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -34,7 +34,7 @@ RELEASES_URL = PROJECT_URL + "/releases"
 LICENSE_FILES = ("LISENSI.txt", "LICENSE")  # this program: GNU AGPL-3.0
 NOTICE_FILES = ("PEMBERITAHUAN-PIHAK-KETIGA.txt", "LICENSE-OMRChecker-asli-MIT.txt")  # upstream MIT and others
 SCAN_TYPES = (".jpg", ".jpeg", ".png", ".pdf")
-ARCHIVE_DIR = "_arsip"  # old scans moved here by "Arsipkan scan lama"; never read
+ARCHIVE_DIR = ujian.ARCHIVE_DIR  # old scans moved here by "Arsipkan scan lama"; never read
 RED, BLUE = "#ffd7d5", "#dbe9ff"
 
 
@@ -803,7 +803,7 @@ class OutputStep(Step):
 
     def has_results(self):
         out = Path(self.folder.get().strip() or ".")
-        return out.is_dir() and any(out.rglob("Results/Results_*.csv"))
+        return out.is_dir() and any(ujian.current(out, "Results/Results_*.csv"))
 
     def check(self):
         for rb in (self.replace_rb, self.new_rb, self.keep_rb):
