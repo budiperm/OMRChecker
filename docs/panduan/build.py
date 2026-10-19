@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -38,10 +38,10 @@ CALLOUTS = {  # each marker sits on the top-left corner of what it points at
     "01_template": [(296, 155), (280, 684), (1147, 753)],
     "02_editor": [(10, 8), (700, 84), (692, 466), (1146, 564), (700, 703), (700, 743)],
     "03_kunci": [(280, 108), (496, 198), (656, 255), (280, 676)],
-    "04_folder": [(991, 137), (1073, 137), (296, 181), (285, 232), (293, 617)],
+    "04_folder": [(808, 137), (889, 137), (1060, 137), (296, 181), (285, 232), (293, 617)],
     "05_scan_dialog": [(22, 30), (22, 90), (22, 182), (22, 218), (460, 390)],
     "06_hasil": [(293, 137), (293, 219), (296, 262)],
-    "07_siap": [(279, 108), (264, 716)],
+    "07_siap": [(279, 108), (770, 104)],
     "08_proses": [(285, 183), (868, 199), (1090, 108), (264, 716)],
     "09_koreksi": [(14, 40), (14, 106), (10, 637), (847, 637)],
     "10_rekap": [(264, 118), (293, 165), (279, 682), (1037, 682)],
@@ -298,6 +298,10 @@ def main(shots, out_pdf):
               shot("04_folder"),
               numbered(["<b>Pilih...</b>: memilih folder berisi file JPG/PNG/PDF. Subfolder ikut dibaca.",
                         "<b>Scan dari scanner...</b>: scan LJK langsung ke folder ini (lihat halaman berikut).",
+                        "<b>Arsipkan scan lama...</b>: sebelum scan ulang, pindahkan file scan lama ke subfolder "
+                        "<i>_arsip\\[tanggal jam]</i> di folder ini. File tidak dihapus dan tidak ikut diproses lagi, "
+                        "jadi LJK tidak terhitung dua kali. Hasil pemeriksaan lama otomatis diganti saat diproses ulang "
+                        "(Langkah 4 memilih <b>Hapus hasil lama lalu proses ulang</b>).",
                         "<b>Ingat folder ini untuk ujian berikutnya</b>: bila dicentang, folder ini dipakai lagi untuk "
                         "ujian berikutnya. Bawaannya tidak dicentang: setelah rekap diekspor atau saat <b>Ujian baru</b>, "
                         "kolom folder dikosongkan (file di folder tidak dihapus), jadi scan baru tidak tercampur dengan LJK lama.",
@@ -350,7 +354,8 @@ def main(shots, out_pdf):
                         "<b>Stop</b> menghentikan proses. Bila dihentikan, klik <b>Proses LJK</b> lagi dan pilih "
                         "<b>Lanjutkan sisanya</b>: LJK yang sudah diperiksa tidak diulang. Pilihan yang sama muncul "
                         "bila ada scan baru yang ditambahkan ke folder.",
-                        "Keterangan jumlah LJK yang siap diperiksa."]),
+                        "Jumlah LJK yang akan diproses, sudah terlihat sebelum tombol ditekan. Halaman PDF "
+                        "dihitung satu per satu."]),
               PageBreak(),
               p("Membaca hasil", "h2"),
               shot("08_proses"),
