@@ -390,6 +390,70 @@ def test_rekap_order_and_participant_reports(setup, monkeypatch):
             pass
 
 
+def test_advanced_export(setup, monkeypatch):
+    import wizard as wz
+    from openpyxl import load_workbook
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: False)
+    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil")).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        run_to_results(w)
+        w.next()
+        step = w.steps[5]
+        out = tmp / "rekap-sendiri.xlsx"
+        monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(out))
+        monkeypatch.setattr(wz.simpledialog, "askstring", lambda *a, **k: "Format sekolah")
+        seen = {}
+
+        def drive(d):
+            pump(d, 3)
+            items = {d.rows[i][1]: i for i in d.tree.get_children()}
+            assert all(d.rows[i][0] for i in items.values())  # first time: every column
+            d.check_all(False)
+            for name in ("Nilai", "Nama", "No. Peserta"):
+                d.tree.selection_set(items[name])
+                d.toggle()
+            d.tree.selection_set(items["No. Peserta"])
+            d.on_select()
+            d.title_var.set("NIS")
+            d.move(-1)
+            d.move(-1)  # to the top
+            d.tree.selection_set(items["Nilai"])
+            d.move(1)  # past Nama
+            d.save_format()
+            seen["values"] = list(d.fmt_box.cget("values"))
+            d.ok()
+
+        monkeypatch.setattr(step, "wait_window", drive)
+        assert step.export_advanced() == str(out)
+        assert seen["values"] == ["Format sekolah"]
+        table = [[c.value for c in r] for r in load_workbook(out)["Rekap"].iter_rows()]
+        assert table[0] == ["NIS", "Nama", "Nilai"] and len(table) == 1 + len(step.results)
+        assert w.exam.exported_file == str(out) and not w.export_pending()
+        formats = ujian.load_export_formats(tmp / "sesi.json")
+        assert formats["Format sekolah"]["kolom"] == [["No. Peserta", "NIS"], ["Nama", "Nama"], ["Nilai", "Nilai"]]
+
+        def again(d):  # the last settings come back; CSV this time
+            pump(d, 3)
+            assert d.columns() == [["No. Peserta", "NIS"], ["Nama", "Nama"], ["Nilai", "Nilai"]]
+            d.kind.set("csv")
+            d.ok()
+
+        csv_out = tmp / "rekap-sendiri.csv"
+        monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(csv_out))
+        monkeypatch.setattr(step, "wait_window", again)
+        assert step.export_advanced() == str(csv_out)
+        assert csv_out.read_text(encoding="utf-8-sig").splitlines()[0] == "NIS,Nama,Nilai"
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+
+
 def test_template_export_and_import_buttons(setup, monkeypatch):
     import wizard as wz
 
