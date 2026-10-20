@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -44,10 +44,11 @@ CALLOUTS = {  # each marker sits on the top-left corner of what it points at
     "07_siap": [(279, 108), (770, 104)],
     "08_proses": [(285, 183), (868, 199), (1090, 108), (264, 716)],
     "09_koreksi": [(14, 40), (14, 106), (10, 637), (847, 637)],
-    "10_rekap": [(264, 118), (293, 165), (279, 682), (1037, 682)],
+    "10_rekap": [(264, 118), (293, 165), (279, 652), (1037, 696)],
     "11_tutup": [(484, 343), (562, 343), (736, 343)],
+    "12_ekspor_lanjutan": [(17, 80), (17, 150), (604, 106), (17, 585), (17, 625), (648, 680)],
 }
-PAD_LEFT = {"05_scan_dialog": 44}  # white margin added on the left for the markers
+PAD_LEFT = {"05_scan_dialog": 44, "12_ekspor_lanjutan": 34}  # white margin added on the left for the markers
 
 
 class Badge(Flowable):
@@ -414,11 +415,12 @@ def main(shots, out_pdf):
                         "<b>Ekspor ke Excel...</b> menyimpan rekap lengkap, termasuk kolom <b>Peringkat</b>. "
                         "<b>Ekspor CSV...</b> menyimpan rekap yang sama plus jawaban tiap soal dalam satu tabel CSV "
                         "(dipisah koma) untuk diimpor ke program lain. "
+                        "<b>Ekspor lanjutan...</b> memilih sendiri kolom, urutan, dan judulnya (lihat di bawah). "
                         "<b>Laporan per peserta (PDF)...</b> membuat satu halaman hasil untuk setiap peserta (identitas, "
                         "nilai, peringkat, dan jawaban dibandingkan dengan kunci) yang siap dicetak atau dibagikan. "
                         "<b>Urutan rekap &amp; laporan</b> mengatur urutan baris: nilai tertinggi dulu, kelompok lalu "
                         "nama, atau nama file. <b>Buka folder hasil</b> membuka folder "
-                        "berisi gambar LJK bertanda. Di sebelahnya tertulis status ekspor: <i>Belum diekspor</i>, "
+                        "berisi gambar LJK bertanda. Di bawahnya tertulis status ekspor: <i>Belum diekspor</i>, "
                         "<i>Sudah diekspor</i>, atau <i>Ada perubahan sejak ekspor terakhir</i> (mis. setelah koreksi).",
                         "<b>Ujian baru (template sama)</b>: mulai ujian berikutnya. Kunci, folder, dan koreksi "
                         "dikosongkan; template tetap."]),
@@ -431,6 +433,23 @@ def main(shots, out_pdf):
                      ["Analisis Butir", "Tingkat kesukaran dan sebaran jawaban tiap soal"],
                      ["Tidak Ikut Ujian", "Peserta di daftar peserta yang tidak punya LJK (bila daftar peserta dipakai)"]],
                     [38 * mm, W - 38 * mm]),  # fmt: skip
+              PageBreak(),
+              p("Ekspor lanjutan: kolom sesuai format Anda", "h2"),
+              p("Bila rekap harus mengikuti format sendiri (mis. format rapor atau sistem sekolah/kantor), klik "
+                "<b>Ekspor lanjutan...</b> di langkah 6. Hasilnya satu tabel dengan judul kolom di baris pertama."),
+              shot("12_ekspor_lanjutan", width=W * 0.75),
+              numbered(["<b>Format</b>: pilih format yang pernah disimpan. <b>Simpan format...</b> menyimpan "
+                        "pilihan sekarang dengan sebuah nama untuk ujian berikutnya; <b>Hapus format</b> menghapusnya.",
+                        "<b>Daftar kolom</b>: semua kolom rekap, nilai per bagian, dan jawaban tiap soal. Klik kotak "
+                        "di kolom <b>Ekspor</b> untuk mencentang; hanya kolom bercentang yang diekspor, sesuai urutan "
+                        "di daftar.",
+                        "<b>Naik</b>/<b>Turun</b> mengatur urutan kolom terpilih. <b>Centang semua</b> dan "
+                        "<b>Hapus semua</b> mempercepat memilih.",
+                        "<b>Judul kolom terpilih</b>: ganti judul di file, mis. <i>No. Peserta</i> menjadi <i>NIS</i>.",
+                        "<b>Simpan sebagai</b> Excel (.xlsx) atau CSV (dipisah koma).",
+                        "<b>Ekspor...</b>: pilih tempat menyimpan. Pengaturan terakhir otomatis muncul lagi saat "
+                        "jendela ini dibuka berikutnya."]),
+              note("Kolom di format tersimpan yang tidak ada di ujian ini (mis. bagian lain) dilewati."),
               PageBreak(),
               p("Selesai dan menutup program", "h2"),
               p("Klik <b>Selesai</b> di kanan bawah. Bila rekap <b>belum diekspor</b>, atau ada perubahan sejak "

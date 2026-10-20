@@ -1232,21 +1232,94 @@ def rekap_table(results, exam, named):
     return headers, rows
 
 
-def export_csv(path, results, exam, questions):
-    """The rekap as one CSV table (UTF-8, comma separated) for other
-    programs: the "Rekap Nilai" columns, then the answer to every question."""
+def export_table(results, exam, questions):
+    """Every exportable column: the "Rekap Nilai" columns, then the answer
+    to every question, rows in rekap order."""
     sections = as_sections(questions)
     results = order_results(results, exam.rekap_order)
     headers, rows = rekap_table(results, exam, [s for s in sections if s])
     labels = [(sec, q) for sec, qs in sections.items() for q in qs]
     headers = headers + [f"Jawaban {question_label(sec, q)}" for sec, q in labels]
-    path = Path(path)
-    with path.open("w", newline="", encoding="utf-8-sig") as f:  # BOM: Excel reads the accents right
+    rows = [row + [r.answers[q] for _, q in labels] for r, row in zip(results, rows)]
+    return headers, rows
+
+
+def _write_csv(path, headers, rows):
+    with Path(path).open("w", newline="", encoding="utf-8-sig") as f:  # BOM: Excel reads the accents right
         w = csv.writer(f)
         w.writerow(headers)
-        for r, row in zip(results, rows):
-            w.writerow(["" if v is None else v for v in row] + [r.answers[q] for _, q in labels])
+        for row in rows:
+            w.writerow(["" if v is None else v for v in row])
+
+
+def export_csv(path, results, exam, questions):
+    """The rekap as one CSV table (UTF-8, comma separated) for other
+    programs: the "Rekap Nilai" columns, then the answer to every question."""
+    path = Path(path)
+    _write_csv(path, *export_table(results, exam, questions))
     return path
+
+
+def export_custom(path, results, exam, questions, columns):
+    """The columns the user picked, in their order and under their own
+    headers: `columns` is [(column, header), ...]. One plain table with the
+    headers on row 1 (.csv, otherwise Excel). Columns this exam does not
+    have are left out; returns (path, the left-out columns)."""
+    headers, rows = export_table(results, exam, questions)
+    index = {h: i for i, h in enumerate(headers)}
+    picked = [(index[c], t or c) for c, t in columns if c in index]
+    missing = [c for c, _ in columns if c not in index]
+    out_headers = [t for _, t in picked]
+    out_rows = [[row[i] for i, _ in picked] for row in rows]
+    path = Path(path)
+    if path.suffix.lower() == ".csv":
+        _write_csv(path, out_headers, out_rows)
+        return path, missing
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rekap"
+    ws.append(out_headers)
+    for row in out_rows:
+        ws.append(row)
+    for c, h in enumerate(out_headers, 1):
+        ws.cell(1, c).font = Font(bold=True)
+        longest = max([len(str(h))] + [len(str(v[c - 1])) for v in out_rows if v[c - 1] is not None])
+        ws.column_dimensions[get_column_letter(c)].width = min(45, max(6, longest + 2))
+    ws.freeze_panes = "A2"
+    wb.save(path)
+    return path, missing
+
+
+EXPORT_FORMATS_FILE = "format_ekspor.json"  # saved "Ekspor lanjutan" formats, next to the session file
+LAST_EXPORT_FORMAT = ""  # the settings used last time, kept under this name
+
+
+def export_formats_path(session=None):
+    return Path(session or Exam.session_path()).with_name(EXPORT_FORMATS_FILE)
+
+
+def load_export_formats(session=None):
+    """{name: {"kolom": [[column, header], ...], "jenis": "xlsx" | "csv"}}"""
+    try:
+        data = json.loads(export_formats_path(session).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    formats = {}
+    for name, fmt in (data if isinstance(data, dict) else {}).items():
+        if isinstance(fmt, dict) and isinstance(fmt.get("kolom"), list):
+            cols = [[str(c[0]), str(c[1])] for c in fmt["kolom"] if isinstance(c, list) and len(c) == 2]
+            formats[str(name)] = {"kolom": cols, "jenis": "csv" if fmt.get("jenis") == "csv" else "xlsx"}
+    return formats
+
+
+def save_export_formats(formats, session=None):
+    path = export_formats_path(session)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(formats, indent=1, ensure_ascii=False), encoding="utf-8")
 
 
 def export_excel(path, results, exam, questions, students=None, title=""):

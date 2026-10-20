@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -1324,19 +1324,20 @@ class ExportStep(Step):
         bar.pack(fill="x", pady=8)
         ttk.Button(bar, text="Ekspor ke Excel...", command=self.export, style="Accent.TButton").pack(side="left")
         ttk.Button(bar, text="Ekspor CSV...", command=self.export_csv).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Ekspor lanjutan...", command=self.export_advanced).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Laporan per peserta (PDF)...", command=self.export_reports).pack(side="left", padx=6)
-        ttk.Button(bar, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="left")
-        ttk.Button(bar, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
-        order = ttk.Frame(self)
+        order = ttk.Frame(self)  # second row: the export buttons fill the first one on a small window
         order.pack(fill="x")
         ttk.Label(order, text="Urutan rekap & laporan:").pack(side="left")
         self.order = tk.StringVar()
         self.order_box = ttk.Combobox(order, textvariable=self.order, state="readonly", width=24,
                                       values=list(ujian.RANK_ORDERS.values()))  # fmt: skip
         self.order_box.pack(side="left", padx=6)
+        ttk.Button(order, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
+        ttk.Button(order, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="right", padx=6)
         self.export_info = tk.StringVar()
-        self.export_label = ttk.Label(order, textvariable=self.export_info, foreground=theme.MUTED)
-        self.export_label.pack(side="left", padx=8)
+        self.export_label = ttk.Label(self, textvariable=self.export_info, foreground=theme.MUTED)
+        self.export_label.pack(anchor="w", pady=(6, 0))
         self.order_box.bind("<<ComboboxSelected>>", lambda e: self.on_order())
 
     def show_export_status(self):
@@ -1440,6 +1441,40 @@ class ExportStep(Step):
         messagebox.showinfo(APP_TITLE, f"Rekap CSV tersimpan:\n{path}", parent=self)
         return True
 
+    def export_advanced(self):
+        """Pick, order and rename the columns (e.g. to match the user's own
+        template); counts as exported too. Returns the dialog (for tests)."""
+        results = self.wizard.compute_results()
+        headers, _ = ujian.export_table(results, self.exam, self.wizard.template.sections)
+        dialog = ExportDialog(self, headers, self.wizard.settings)
+        self.wait_window(dialog)
+        if not dialog.result:
+            return None
+        columns, kind = dialog.result
+        name = ujian.safe_name(f"Rekap {self.exam.name or 'Ujian'}")
+        types = [("Excel", "*.xlsx")] if kind == "xlsx" else [("CSV", "*.csv")]
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Simpan rekap", defaultextension=f".{kind}",
+            initialdir=self.exam.output_dir, initialfile=f"{name}.{kind}", filetypes=types,
+        )  # fmt: skip
+        if not path:
+            return None
+        if Path(path).suffix.lower() not in (".xlsx", ".csv"):
+            path = str(Path(path).with_suffix(f".{kind}"))
+        results = self.wizard.compute_results()
+        try:
+            ujian.export_custom(path, results, self.exam, self.wizard.template.sections, columns)
+        except PermissionError:
+            messagebox.showerror(APP_TITLE, "File sedang dibuka di program lain. Tutup dulu lalu coba lagi.", parent=self)
+            return None
+        self.exam.exported_file = str(Path(path))
+        self.exam.exported_state = ujian.rekap_state(self.exam)
+        self.exam.save(self.wizard.settings)
+        self.show_export_status()
+        if messagebox.askyesno(APP_TITLE, "Rekap tersimpan. Buka sekarang?", parent=self):
+            open_file(path, self)
+        return path
+
     def new_exam(self):
         kept = any(self.wizard.prefs.values())
         cleared = "Kunci, koreksi, dan folder yang tidak diingat" if kept else "Kunci, folder, dan koreksi"
@@ -1484,6 +1519,207 @@ def open_file(path, parent):
         open_path(path)
     except OSError as e:
         messagebox.showerror(APP_TITLE, str(e), parent=parent)
+
+
+class ExportDialog(tk.Toplevel):
+    """"Ekspor lanjutan": tick the columns, order them, rename their headers
+    and pick Excel or CSV. The settings can be saved as a named format; the
+    last one used comes back next time. `result`: ([(column, header)], kind)."""
+
+    def __init__(self, master, headers, settings=None):
+        super().__init__(master)
+        self.title("Ekspor lanjutan")
+        self.transient(master.winfo_toplevel())
+        self.settings = settings
+        self.headers = list(headers)
+        self.result = None
+        self.formats = ujian.load_export_formats(settings)
+        f = ttk.Frame(self, padding=(20, 16, 20, 16))
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text="Pilih kolom yang diekspor, atur urutannya, dan ganti judulnya bila perlu "
+                          "supaya cocok dengan format Anda.", wraplength=620, justify="left").pack(anchor="w")  # fmt: skip
+        top = ttk.Frame(f)
+        top.pack(fill="x", pady=(10, 6))
+        ttk.Label(top, text="Format:").pack(side="left")
+        self.fmt = tk.StringVar()
+        self.fmt_box = ttk.Combobox(top, textvariable=self.fmt, state="readonly", width=28)
+        self.fmt_box.pack(side="left", padx=6)
+        self.fmt_box.bind("<<ComboboxSelected>>", lambda e: self.use_format(self.fmt.get()))
+        ttk.Button(top, text="Simpan format...", command=self.save_format).pack(side="left")
+        ttk.Button(top, text="Hapus format", command=self.delete_format).pack(side="left", padx=6)
+        mid = ttk.Frame(f)
+        mid.pack(fill="both", expand=True)
+        self.tree = ttk.Treeview(mid, columns=("pakai", "kolom", "judul"), show="headings", height=14, selectmode="browse")
+        for c, text, width in (("pakai", "Ekspor", 60), ("kolom", "Kolom", 200), ("judul", "Judul di file", 260)):
+            self.tree.heading(c, text=text)
+            self.tree.column(c, width=width, anchor="center" if c == "pakai" else "w", stretch=c != "pakai")
+        vs = ttk.Scrollbar(mid, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vs.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        vs.pack(side="left", fill="y")
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self.on_select())
+        self.tree.bind("<space>", lambda e: self.toggle())
+        self.tree.bind("<Button-1>", self.on_click)
+        side = ttk.Frame(mid)
+        side.pack(side="left", fill="y", padx=(10, 0))
+        for text, cmd in (("Centang / hapus", self.toggle), ("Naik", lambda: self.move(-1)), ("Turun", lambda: self.move(1)),
+                          ("Centang semua", lambda: self.check_all(True)), ("Hapus semua", lambda: self.check_all(False))):  # fmt: skip
+            ttk.Button(side, text=text, command=cmd).pack(fill="x", pady=(0, 6))
+        edit = ttk.Frame(f)
+        edit.pack(fill="x", pady=(8, 0))
+        ttk.Label(edit, text="Judul kolom terpilih:").pack(side="left")
+        self.title_var = tk.StringVar()
+        self.title_entry = ttk.Entry(edit, textvariable=self.title_var, width=36)
+        self.title_entry.pack(side="left", padx=6)
+        self.title_var.trace_add("write", lambda *a: self.on_title())
+        kind = ttk.Frame(f)
+        kind.pack(fill="x", pady=(10, 0))
+        ttk.Label(kind, text="Simpan sebagai:").pack(side="left")
+        self.kind = tk.StringVar(value="xlsx")
+        ttk.Radiobutton(kind, text="Excel (.xlsx)", value="xlsx", variable=self.kind).pack(side="left", padx=6)
+        ttk.Radiobutton(kind, text="CSV (.csv)", value="csv", variable=self.kind).pack(side="left")
+        self.info = tk.StringVar()
+        ttk.Label(f, textvariable=self.info, foreground=theme.MUTED).pack(anchor="w", pady=(8, 0))
+        bar = ttk.Frame(f)
+        bar.pack(fill="x", pady=(12, 0))
+        ttk.Button(bar, text="Ekspor...", style="Accent.TButton", command=self.ok).pack(side="right")
+        ttk.Button(bar, text="Batal", command=self.destroy).pack(side="right", padx=8)
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.rows = {}  # tree item -> [checked, column, header]
+        self.refresh_formats()
+        last = self.formats.get(ujian.LAST_EXPORT_FORMAT)
+        self.load_columns(last["kolom"] if last else [[h, h] for h in self.headers], last["jenis"] if last else "xlsx")
+        self.update_idletasks()
+        owner = master.winfo_toplevel()
+        x = owner.winfo_rootx() + (owner.winfo_width() - self.winfo_reqwidth()) // 2
+        y = owner.winfo_rooty() + (owner.winfo_height() - self.winfo_reqheight()) // 3
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+        self.grab_set()
+
+    def refresh_formats(self):
+        names = sorted(n for n in self.formats if n != ujian.LAST_EXPORT_FORMAT)
+        self.fmt_box.configure(values=names)
+        if self.fmt.get() not in names:
+            self.fmt.set("")
+
+    def load_columns(self, columns, kind):
+        """Ticked columns first in their saved order, then the rest unticked."""
+        self.tree.delete(*self.tree.get_children())
+        self.rows = {}
+        picked = [(c, t) for c, t in columns if c in self.headers]
+        names = {c for c, _ in picked}
+        rest = [(h, h) for h in self.headers if h not in names]
+        for checked, items in ((True, picked), (False, rest)):
+            for c, t in items:
+                item = self.tree.insert("", "end")
+                self.rows[item] = [checked, c, t or c]
+                self.show(item)
+        self.kind.set(kind)
+        missing = len(columns) - len(picked)
+        self.info.set(f"{missing} kolom di format ini tidak ada di ujian ini dan dilewati." if missing else "")
+        first = self.tree.get_children()
+        if first:
+            self.tree.selection_set(first[0])
+
+    def show(self, item):
+        checked, c, t = self.rows[item]
+        self.tree.item(item, values=("✓" if checked else "", c, t))
+
+    def selected(self):
+        sel = self.tree.selection()
+        return sel[0] if sel else None
+
+    def on_select(self):
+        item = self.selected()
+        self._editing = None  # no write-back while the entry is refilled
+        self.title_var.set(self.rows[item][2] if item else "")
+        self._editing = item
+
+    def on_title(self):
+        item = getattr(self, "_editing", None)
+        if item in self.rows:
+            self.rows[item][2] = self.title_var.get()
+            self.show(item)
+
+    def on_click(self, event):
+        if self.tree.identify_column(event.x) == "#1" and self.tree.identify_row(event.y):
+            self.tree.selection_set(self.tree.identify_row(event.y))
+            self.toggle()
+            return "break"
+
+    def toggle(self):
+        item = self.selected()
+        if item:
+            self.rows[item][0] = not self.rows[item][0]
+            self.show(item)
+
+    def check_all(self, value):
+        for item in self.rows:
+            self.rows[item][0] = value
+            self.show(item)
+
+    def move(self, step):
+        item = self.selected()
+        if item:
+            index = self.tree.index(item) + step
+            if 0 <= index < len(self.rows):
+                self.tree.move(item, "", index)
+                self.tree.see(item)
+
+    def columns(self):
+        out = []
+        for item in self.tree.get_children():
+            checked, c, t = self.rows[item]
+            if checked:
+                out.append([c, t.strip() or c])
+        return out
+
+    def use_format(self, name):
+        fmt = self.formats.get(name)
+        if fmt:
+            self.load_columns(fmt["kolom"], fmt["jenis"])
+
+    def store(self):
+        try:
+            ujian.save_export_formats(self.formats, self.settings)
+        except OSError as e:
+            messagebox.showerror(APP_TITLE, f"Format tidak bisa disimpan:\n{e}", parent=self)
+
+    def save_format(self):
+        if not self.columns():
+            messagebox.showerror(APP_TITLE, "Centang minimal satu kolom dulu.", parent=self)
+            return
+        name = simpledialog.askstring(APP_TITLE, "Nama format (misalnya \"Format sekolah\"):",
+                                      initialvalue=self.fmt.get(), parent=self)  # fmt: skip
+        name = (name or "").strip()
+        if not name:
+            return
+        if name in self.formats and name != self.fmt.get():
+            if not messagebox.askyesno(APP_TITLE, f"Format \"{name}\" sudah ada. Timpa?", parent=self):
+                return
+        self.formats[name] = {"kolom": self.columns(), "jenis": self.kind.get()}
+        self.store()
+        self.refresh_formats()
+        self.fmt.set(name)
+        self.info.set(f"Format \"{name}\" tersimpan.")
+
+    def delete_format(self):
+        name = self.fmt.get()
+        if not name or not messagebox.askyesno(APP_TITLE, f"Hapus format \"{name}\"?", parent=self):
+            return
+        self.formats.pop(name, None)
+        self.store()
+        self.refresh_formats()
+
+    def ok(self):
+        columns = self.columns()
+        if not columns:
+            messagebox.showerror(APP_TITLE, "Centang minimal satu kolom untuk diekspor.", parent=self)
+            return
+        self.formats[ujian.LAST_EXPORT_FORMAT] = {"kolom": columns, "jenis": self.kind.get()}
+        self.store()
+        self.result = ([tuple(c) for c in columns], self.kind.get())
+        self.destroy()
 
 
 class ChoiceDialog(tk.Toplevel):

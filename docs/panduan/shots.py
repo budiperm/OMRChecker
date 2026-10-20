@@ -148,6 +148,22 @@ def main():
     w.next()
     shot("10_rekap")
 
+    # "Ekspor lanjutan": a few columns picked, renamed and saved as a format
+    step = w.steps[5]
+    headers, _ = ujian.export_table(step.results, w.exam, w.template.sections)
+    picked = [["No. Peserta", "NIS"], ["Nama", "Nama Siswa"], ["Kelompok", "Kelas"], ["Nilai", "Nilai"],
+              ["Keterangan", "Ket."]]
+    ujian.save_export_formats({"Format rapor": {"kolom": picked, "jenis": "xlsx"}}, work / "sesi.json")
+    d = wz.ExportDialog(step, headers, work / "sesi.json")
+    d.fmt.set("Format rapor")
+    d.use_format("Format rapor")
+    d.tree.selection_set(d.tree.get_children()[1])
+    d.geometry("+260+60")
+    pump(30)
+    shot("12_ekspor_lanjutan", d)
+    d.destroy()
+    pump()
+
     # closing without an export: the question shown before the window closes
     def ask(master, heading, text, buttons, detail=""):
         d = wz.ChoiceDialog(master, heading, text, buttons, detail)

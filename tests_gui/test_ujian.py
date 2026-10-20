@@ -273,6 +273,35 @@ def test_export_csv(tmp_path):
     assert len(table) == 4 and by_nis[""]["File"] == "rusak.jpg" and by_nis[""]["Nilai"] == ""
 
 
+def test_export_custom_and_formats(tmp_path):
+    import csv
+
+    from openpyxl import load_workbook
+
+    rows = [row("a.jpg", list("ABCDE"), KodeSoal="101", NIS="1", Nama="ANI"),
+            row("b.jpg", ["A", "", "C", "D", "A"], KodeSoal="101", NIS="2", Nama="BUDI")]
+    e = exam(kkm=75)
+    results = ujian.score_results(rows, [], e, Q5)
+    cols = [("Nama", "Nama Siswa"), ("No. Peserta", "NIS"), ("Nilai", ""), ("Jawaban 2", "S2"), ("Benar X", "Hilang")]
+    path, missing = ujian.export_custom(tmp_path / "rekap.xlsx", results, e, Q5, cols)
+    assert missing == ["Benar X"]
+    ws = load_workbook(path)["Rekap"]
+    table = [[c.value for c in r] for r in ws.iter_rows()]
+    assert table[0] == ["Nama Siswa", "NIS", "Nilai", "S2"]
+    assert table[1:] == [["ANI", "1", 100.0, "B"], ["BUDI", "2", 60.0, None]]
+    path, _ = ujian.export_custom(tmp_path / "rekap.csv", results, e, Q5, cols)
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        assert list(csv.reader(f)) == [["Nama Siswa", "NIS", "Nilai", "S2"], ["ANI", "1", "100.0", "B"], ["BUDI", "2", "60.0", ""]]
+
+    session = tmp_path / "sesi.json"
+    assert ujian.load_export_formats(session) == {}
+    formats = {"Sekolah": {"kolom": [["Nama", "Nama Siswa"]], "jenis": "csv"}}
+    ujian.save_export_formats(formats, session)
+    assert ujian.load_export_formats(session) == formats
+    ujian.export_formats_path(session).write_text("rusak", encoding="utf-8")
+    assert ujian.load_export_formats(session) == {}
+
+
 def test_parse_weights():
     w, problems = ujian.parse_weights("1-10:2, 11-20:1", 20)
     assert problems == [] and len(w) == 20 and w[1] == 2 and w[20] == 1
