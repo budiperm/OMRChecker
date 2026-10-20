@@ -285,7 +285,10 @@ def rename_section_in_exam(exam, old, new, mapping):
             exam.keys[code] = keys
     if old in exam.weights:
         exam.weights[new] = exam.weights.pop(old)
-    exam.in_order = [new if p == old else p for p in exam.in_order]
+    if isinstance(exam.in_order, list):
+        exam.in_order = [new if p == old else p for p in exam.in_order]
+    else:
+        exam.in_order = {c: [new if p == old else p for p in parts] for c, parts in exam.in_order.items()}
     for fid, fixes in exam.corrections.items():
         exam.corrections[fid] = {mapping.get(k, k): v for k, v in fixes.items()}
 
@@ -420,8 +423,10 @@ class Exam:
     # questions not listed use `correct`
     weights: dict = field(default_factory=dict)
     # parts that must be answered in order: after the first blank question,
-    # the answers that follow are not counted (scored as blank)
-    in_order: list = field(default_factory=list)
+    # the answers that follow are not counted (scored as blank). Per exam
+    # code: {code: [part, ...]}; a plain list (v1.3.x) holds for every code
+    # (in_order_for).
+    in_order: dict = field(default_factory=dict)
     # template folder name -> its KEY_FIELDS and corrections, kept while another
     # template is chosen so switching back brings them back (switch_template)
     template_keys: dict = field(default_factory=dict)
@@ -613,6 +618,127 @@ def parse_key(text):
 
 
 # ---------------------------------------------------------------------------
+# Answer key files: the keys of step 2 saved to use again with the same LJK
+# template when the questions (and so the keys) change
+# ---------------------------------------------------------------------------
+
+KEYS_EXT = ".kunci"
+KEYS_FORMAT = "omrchecker-kunci"
+
+
+def export_keys_file(exam, sections, path, template_name=""):
+    """Save the scored keys of `exam` (per exam code when it reads a code
+    column), with weights, the in-order parts and the scoring, as JSON."""
+    codes = active_codes(exam)
+    data = {
+        "format": KEYS_FORMAT,
+        "version": 1,
+        "template": template_name,
+        "sections": {p: len(labels) for p, labels in as_sections(sections).items()},
+        "code_column": exam.code_column,
+        "keys": {c: keys_for(exam, c) or {} for c in codes},
+        "in_order": {c: list(in_order_for(exam, c)) for c in codes},
+        "weights": dict(exam.weights),
+        "scoring": {"correct": exam.correct, "incorrect": exam.incorrect, "unmarked": exam.unmarked,
+                    "scale_100": exam.scale_100, "kkm": exam.kkm},
+    }  # fmt: skip
+    path = Path(path)
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def import_keys_file(path, exam, sections, columns=()):
+    """Take the keys of a file saved by export_keys_file into `exam` for the
+    template whose parts are `sections` ({part: labels}) and whose text
+    columns are `columns`. Replaces the keys of the mode the file was saved
+    in (the other mode's keys are kept, see active_codes). Returns warnings
+    for what did not fit the template; raises ValueError when the file is
+    not an answer key file."""
+    path = Path(path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as e:
+        raise ValueError(f"Bukan file kunci jawaban ({KEYS_EXT}): {path.name}") from e
+    if not isinstance(data, dict) or data.get("format") != KEYS_FORMAT or not isinstance(data.get("keys"), dict):
+        raise ValueError(f"Bukan file kunci jawaban ({KEYS_EXT}): {path.name}")
+    sections = as_sections(sections)
+    warnings = []
+    file_parts = {p for keys in data["keys"].values() if isinstance(keys, dict) for p in keys}
+    file_parts |= set(data.get("sections") or {})
+    rename = {}
+    if len(file_parts) == 1 and len(sections) == 1 and not file_parts & set(sections):
+        rename = {next(iter(file_parts)): next(iter(sections))}  # one part, named differently
+
+    def part_of(p):
+        return rename.get(p, p)
+
+    def label(p):
+        return f"Bagian {p}" if p else "Kunci"
+
+    code_column = str(data.get("code_column") or "")
+    if code_column and code_column not in columns:
+        guess = next((c for c in columns if "kode" in c.lower()), columns[0] if columns else "")
+        warnings.append(f"Kolom kode naskah '{code_column}' tidak ada di template ini"
+                        + (f", dipakai kolom '{guess}'. Periksa pilihan kolomnya." if guess else "."))  # fmt: skip
+        code_column = guess or code_column
+    keys, in_order, extra, long = {}, {}, set(), set()
+    file_order = data.get("in_order") if isinstance(data.get("in_order"), dict) else {}
+    for orig, parts in data["keys"].items():
+        code = str(orig)
+        if not code_column:
+            code = ALL_CODES
+        elif code == ALL_CODES:
+            continue
+        if isinstance(parts, str):
+            parts = {"": parts}
+        if not isinstance(parts, dict):
+            continue
+        keys[code] = {}
+        for p, key in parts.items():
+            key, _ = parse_key(key)
+            if part_of(p) not in sections:
+                if key:
+                    extra.add(p)
+                continue
+            keys[code][part_of(p)] = key
+            if len(key) > len(sections[part_of(p)]):
+                long.add((part_of(p), len(key)))
+        order = file_order.get(orig) or []
+        in_order[code] = [part_of(p) for p in order if part_of(p) in sections]
+    if not any(k for parts in keys.values() for k in parts.values()):
+        raise ValueError(f"File {path.name} tidak berisi kunci untuk bagian template ini.")
+    warnings += [f"{label(p)} tidak ada di template ini, kuncinya tidak dipakai." for p in sorted(extra)]
+    missing = [p for p in sections if not any(parts.get(p) for parts in keys.values())]
+    warnings += [f"{label(p)} tidak ada di file ini, kuncinya masih kosong." for p in missing]
+    warnings += [f"{label(p)}: kunci berisi {n} jawaban, padahal hanya {len(sections[p])} soal."
+                 for p, n in sorted(long)]  # fmt: skip
+
+    if code_column:  # replace the keys of this mode only
+        exam.keys = {c: k for c, k in exam.keys.items() if c == ALL_CODES}
+    else:
+        exam.keys = {c: k for c, k in exam.keys.items() if c != ALL_CODES}
+    exam.keys.update(keys)
+    if isinstance(exam.in_order, list):
+        exam.in_order = {c: list(exam.in_order) for c in exam.keys if c not in keys}
+    else:
+        exam.in_order = {c: v for c, v in exam.in_order.items() if c in exam.keys and c not in keys}
+    exam.in_order.update(in_order)
+    exam.code_column = code_column
+    weights = data.get("weights") or {}
+    exam.weights = {part_of(p): str(w) for p, w in weights.items() if part_of(p) in sections and str(w).strip()}
+    scoring = data.get("scoring") or {}
+    try:
+        for f in ("correct", "incorrect", "unmarked", "kkm"):
+            if f in scoring:
+                setattr(exam, f, float(scoring[f]))
+    except (TypeError, ValueError):
+        warnings.append("Aturan skor di file ini tidak terbaca, skor tidak diubah.")
+    if "scale_100" in scoring:
+        exam.scale_100 = bool(scoring["scale_100"])
+    return warnings
+
+
+# ---------------------------------------------------------------------------
 # Results and scoring
 # ---------------------------------------------------------------------------
 
@@ -747,6 +873,36 @@ def keys_for(exam, code):
     return {"": k} if isinstance(k, str) else k
 
 
+def active_codes(exam):
+    """Codes whose keys are scored: the per-code keys when the exam reads a
+    code column, otherwise ALL_CODES. The keys of the other mode stay in
+    exam.keys, so switching the mode back and forth loses nothing."""
+    if exam.code_column:
+        return [c for c in exam.keys if c != ALL_CODES]
+    return [ALL_CODES] if ALL_CODES in exam.keys else []
+
+
+def in_order_for(exam, code):
+    """Parts of `code` that must be answered in order."""
+    if isinstance(exam.in_order, list):  # v1.3.x: one setting for every code
+        return exam.in_order
+    return exam.in_order.get(code, [])
+
+
+def set_in_order(exam, code, part, on):
+    """Turn 'must be answered in order' on or off for one part of one code."""
+    if isinstance(exam.in_order, list):  # from now on per code
+        exam.in_order = {c: list(exam.in_order) for c in {*exam.keys, ALL_CODES}}
+    parts = [p for p in exam.in_order.get(code, []) if p != part]
+    exam.in_order[code] = parts + [part] if on else parts
+
+
+def uses_in_order(exam):
+    """Whether any scored code has a part that must be answered in order
+    (the rekap then gets a 'Tidak dihitung' column)."""
+    return any(in_order_for(exam, c) for c in active_codes(exam))
+
+
 def question_label(section, q):
     """Readable label: 'I-5' for part I question 5, 'q5' -> '5'."""
     num = q[len(q.rstrip("0123456789")):]
@@ -844,7 +1000,7 @@ def _score_one(res, exam, sections):
     res.multi = len(multi)
     keys = keys_for(exam, res.code)
     if keys is None:
-        if exam.keys:
+        if active_codes(exam):
             res.flags.append(f"Kode naskah '{res.code}' tidak punya kunci jawaban")
         return
     total_best = 0.0
@@ -865,7 +1021,7 @@ def _score_one(res, exam, sections):
                 res.skipped.append(q)
                 score += exam.unmarked
             elif a == "":
-                if sec in exam.in_order and gap is None:
+                if sec in in_order_for(exam, res.code) and gap is None:
                     gap = question_label(sec, q)
                 part["kosong"] += 1
                 score += exam.unmarked
@@ -1028,7 +1184,7 @@ def item_analysis(results, exam, questions):
             pct = round(right / total * 100, 1)
             level = "Mudah" if pct > 70 else "Sedang" if pct >= 30 else "Sukar"
             per_code = {}
-            for code in exam.keys:
+            for code in active_codes(exam):
                 k = (keys_for(exam, code) or {}).get(sec, "")
                 if i < len(k):
                     per_code[code] = k[i]
@@ -1054,7 +1210,7 @@ def rekap_table(results, exam, named):
         headers.append("Kode Naskah")
     for sec in named:
         headers += [f"Benar {sec}", f"Nilai {sec}"]
-    headers += ["Benar", "Salah", "Kosong"] + (["Tidak dihitung"] if exam.in_order else [])
+    headers += ["Benar", "Salah", "Kosong"] + (["Tidak dihitung"] if uses_in_order(exam) else [])
     headers += ["Skor", "Nilai", "Peringkat"]
     if exam.kkm:
         headers.append("Keterangan")
@@ -1067,7 +1223,7 @@ def rekap_table(results, exam, named):
         for sec in named:
             part = r.parts.get(sec, {})
             row += [part.get("benar"), part.get("nilai")]
-        row += [r.correct, r.wrong, r.blank] + ([r.ignored] if exam.in_order else [])
+        row += [r.correct, r.wrong, r.blank] + ([r.ignored] if uses_in_order(exam) else [])
         row += [r.score, r.grade, r.rank]
         if exam.kkm:
             row.append("" if r.passed is None else "Lulus" if r.passed else "Tidak lulus")
@@ -1150,12 +1306,12 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     rows = [[r.nis, r.name] + ([r.code] if exam.code_column else []) + [r.answers[q] for _, q in labels]
             for r in results]  # fmt: skip
     table(ws, 1, headers, rows)
-    if exam.in_order:
+    if uses_in_order(exam):
         ws.freeze_panes = None
         ws.insert_rows(1)
         ws["A1"] = "Kuning: jawaban tidak dihitung karena ada soal kosong sebelumnya (harus diisi berurutan)"
         ws.freeze_panes = "A3"
-    top = 3 if exam.in_order else 2
+    top = 3 if uses_in_order(exam) else 2
     for i, r in enumerate(results):
         keys = keys_for(exam, r.code) or {}
         for j, (sec, q) in enumerate(labels):
@@ -1223,10 +1379,10 @@ def _report_html(r, exam, sections, title, total):
     rank = f"{r.rank} dari {total}" if r.rank else "-"
     score = (
         "<tr><th>Benar</th><th>Salah</th><th>Kosong</th>"
-        + ("<th>Tidak dihitung</th>" if exam.in_order else "") + "<th>Skor</th><th>Nilai</th><th>Peringkat</th>"
+        + ("<th>Tidak dihitung</th>" if uses_in_order(exam) else "") + "<th>Skor</th><th>Nilai</th><th>Peringkat</th>"
         + ("<th>Keterangan</th>" if exam.kkm else "") + "</tr>"
         + f"<tr><td>{r.correct}</td><td>{r.wrong}</td><td>{r.blank}</td>"
-        + (f"<td>{r.ignored}</td>" if exam.in_order else "")
+        + (f"<td>{r.ignored}</td>" if uses_in_order(exam) else "")
         + f"<td>{'' if r.score is None else f'{r.score:g}'}</td><td><b>{'' if r.grade is None else f'{r.grade:g}'}</b></td>"
         + f"<td>{rank}</td>" + (f"<td>{status}</td>" if exam.kkm else "") + "</tr>"
     )

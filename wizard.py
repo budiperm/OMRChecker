@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -336,6 +336,12 @@ class KeyStep(Step):
         self.code_col = tk.StringVar()
         self.code_box = ttk.Combobox(top, textvariable=self.code_col, state="readonly", width=18)
         self.code_box.pack(side="left")
+        files = ttk.Frame(self)  # keys kept for the next exam on the same LJK template
+        files.pack(fill="x", pady=(6, 0))
+        ttk.Button(files, text="Buka kunci...", command=self.import_keys).pack(side="left")
+        ttk.Button(files, text="Simpan kunci...", command=self.export_keys).pack(side="left", padx=4)
+        ttk.Label(files, text="file kunci jawaban, untuk dipakai lagi dengan template LJK yang sama",
+                  foreground=theme.MUTED).pack(side="left", padx=4)  # fmt: skip
 
         mid = ttk.Frame(self)
         mid.pack(fill="both", expand=True, pady=8)
@@ -389,6 +395,7 @@ class KeyStep(Step):
         for w in self.keys_frame.winfo_children():
             w.destroy()
         self.texts, self.counters, self.weights, self.in_order, self.thumbs = {}, {}, {}, {}, []
+        self.order_boxes = {}
         template = self.wizard.template
         for i, (part, labels) in enumerate(template.sections.items()):
             name = f"Bagian {part}" if part else "Jawaban"
@@ -416,9 +423,11 @@ class KeyStep(Step):
             ttk.Label(wrow, text="Bobot benar (opsional):").pack(side="left")
             ttk.Entry(wrow, textvariable=weight, width=30).pack(side="left", padx=4)
             ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", foreground=theme.MUTED).pack(side="left")
-            in_order = tk.BooleanVar(value=part in self.exam.in_order)
-            ttk.Checkbutton(row, text="Harus diisi berurutan (jawaban setelah soal kosong tidak dihitung)",
-                            variable=in_order, command=lambda p=part: self.on_in_order(p)).grid(row=3, column=1, sticky="w", pady=(2, 0))  # fmt: skip
+            in_order = tk.BooleanVar()  # per exam code: set in load_texts
+            box = ttk.Checkbutton(row, text="Harus diisi berurutan (jawaban setelah soal kosong tidak dihitung)",
+                                  variable=in_order, command=lambda p=part: self.on_in_order(p))  # fmt: skip
+            box.grid(row=3, column=1, sticky="w", pady=(2, 0))
+            self.order_boxes[part] = box
             row.columnconfigure(1, weight=1)
             self.texts[part], self.counters[part], self.weights[part] = text, counter, weight
             self.in_order[part] = in_order
@@ -462,8 +471,8 @@ class KeyStep(Step):
         self.update_counter(part)
 
     def on_in_order(self, part):
-        others = [p for p in self.exam.in_order if p != part]
-        self.exam.in_order = others + [part] if self.in_order[part].get() else others
+        if self.current_code is not None:
+            ujian.set_in_order(self.exam, self.current_code, part, self.in_order[part].get())
 
     def on_mode(self):
         if self.mode.get() == "code":
@@ -484,6 +493,10 @@ class KeyStep(Step):
 
     def load_texts(self):
         keys = (ujian.keys_for(self.exam, self.current_code) or {}) if self.current_code else {}
+        order = ujian.in_order_for(self.exam, self.current_code) if self.current_code else []
+        for part, var in self.in_order.items():
+            var.set(part in order)
+            self.order_boxes[part].state(["disabled"] if self.current_code is None else ["!disabled"])
         for part, text in self.texts.items():
             text.configure(state="normal")
             text.delete("1.0", "end")
@@ -512,6 +525,8 @@ class KeyStep(Step):
     def remove_code(self):
         if self.current_code and self.current_code != ujian.ALL_CODES:
             self.exam.keys.pop(self.current_code, None)
+            if isinstance(self.exam.in_order, dict):
+                self.exam.in_order.pop(self.current_code, None)
             self.on_mode()
 
     def on_key_edit(self, part):
@@ -540,8 +555,9 @@ class KeyStep(Step):
             note += "  — kelebihan!"
         self.counters[part].set(note)
 
-    def leave(self):
-        e = self.exam
+    def apply_scoring(self, e):
+        """Scoring fields and the key mode from the screen into exam `e`;
+        False (after telling why) when something is not filled in right."""
         try:
             e.correct, e.incorrect, e.unmarked = (float(v.get().replace(",", ".")) for v in (self.correct, self.incorrect, self.unmarked))
             e.kkm = float(self.kkm.get().replace(",", ".")) if self.kkm.get().strip() else 0
@@ -554,22 +570,80 @@ class KeyStep(Step):
                 messagebox.showerror(APP_TITLE, "Pilih kolom yang berisi kode naskah.", parent=self)
                 return False
             e.code_column = self.code_col.get()
-            e.keys.pop(ujian.ALL_CODES, None)
         else:
             e.code_column = ""
-            e.keys = {ujian.ALL_CODES: e.keys.get(ujian.ALL_CODES, {})}
+        return True
+
+    def export_keys(self):
+        from copy import deepcopy
+
+        e = deepcopy(self.exam)
+        if not self.apply_scoring(e):
+            return
+        if not any(k for c in ujian.active_codes(e) for k in (ujian.keys_for(e, c) or {}).values()):
+            messagebox.showinfo(APP_TITLE, "Belum ada kunci jawaban yang bisa disimpan.", parent=self)
+            return
+        t = self.wizard.template
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Simpan kunci jawaban", defaultextension=ujian.KEYS_EXT,
+            initialfile=f"{ujian.safe_name(self.exam.name or t.name)}{ujian.KEYS_EXT}",
+            filetypes=[("Kunci jawaban", f"*{ujian.KEYS_EXT}")],
+        )  # fmt: skip
+        if not path:
+            return
+        try:
+            ujian.export_keys_file(e, t.sections, path, t.name)
+        except OSError as err:
+            messagebox.showerror(APP_TITLE, f"Kunci jawaban tidak bisa disimpan:\n{err}", parent=self)
+            return
+        messagebox.showinfo(APP_TITLE, f"Kunci jawaban tersimpan:\n{path}\n\nPakai lagi dengan tombol 'Buka kunci...'.",
+                            parent=self)  # fmt: skip
+
+    def import_keys(self):
+        path = filedialog.askopenfilename(
+            parent=self, title="Buka kunci jawaban",
+            filetypes=[("Kunci jawaban", f"*{ujian.KEYS_EXT}"), ("Semua file", "*.*")],
+        )  # fmt: skip
+        if not path:
+            return
+        e = self.exam
+        if any(k for c in e.keys for k in (ujian.keys_for(e, c) or {}).values()) and not messagebox.askyesno(
+            APP_TITLE, "Kunci jawaban yang sudah diisi akan diganti dengan isi file ini. Lanjutkan?", parent=self
+        ):
+            return
+        t = self.wizard.template
+        try:
+            warnings = ujian.import_keys_file(path, e, t.sections, t.columns)
+        except ValueError as err:
+            messagebox.showerror(APP_TITLE, str(err), parent=self)
+            return
+        self.enter()
+        if warnings:
+            messagebox.showwarning(APP_TITLE, "Kunci jawaban dibuka, tapi periksa dulu:\n- " + "\n- ".join(warnings),
+                                   parent=self)  # fmt: skip
+
+    def leave(self):
+        e = self.exam
+        if not self.apply_scoring(e):
+            return False
         # Keys and weights saved for sections of an earlier template (renamed,
         # deleted or switched) are not shown here and would never be scored.
+        # The keys of the other mode (one key / per code) are kept: switching
+        # back brings them back (ujian.active_codes).
         sections = self.wizard.template.sections
         for code in e.keys:
             e.keys[code] = {p: k for p, k in (ujian.keys_for(e, code) or {}).items() if p in sections}
         e.weights = {p: w for p, w in e.weights.items() if p in sections}
-        e.in_order = [p for p in e.in_order if p in sections]
+        if isinstance(e.in_order, list):
+            e.in_order = [p for p in e.in_order if p in sections]
+        else:
+            e.in_order = {c: [p for p in parts if p in sections] for c, parts in e.in_order.items()
+                          if c in e.keys and any(p in sections for p in parts)}  # fmt: skip
         problems = []
         for part, labels in self.wizard.template.sections.items():
             _, wrong = ujian.parse_weights(e.weights.get(part, ""), len(labels))
             problems += [f"Bobot bagian {part or '-'}: {w}" for w in wrong]
-        for code in e.keys:
+        for code in ujian.active_codes(e):
             for part, key in (ujian.keys_for(e, code) or {}).items():
                 labels = sections[part]
                 if len(key) > len(labels):
@@ -582,7 +656,7 @@ class KeyStep(Step):
         if problems:
             messagebox.showerror(APP_TITLE, "Perbaiki dulu:\n- " + "\n- ".join(problems), parent=self)
             return False
-        filled = any(k for code in e.keys for k in (ujian.keys_for(e, code) or {}).values())
+        filled = any(k for code in ujian.active_codes(e) for k in (ujian.keys_for(e, code) or {}).values())
         if not filled and not messagebox.askyesno(
             APP_TITLE, "Belum ada kunci jawaban: LJK hanya dibaca, tidak dinilai. Lanjutkan?", parent=self
         ):
