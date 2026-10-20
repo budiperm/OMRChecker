@@ -692,3 +692,57 @@ def test_each_template_keeps_its_own_keys(setup, monkeypatch):
         assert saved.keys[ujian.ALL_CODES] == {part: "ABCDE"} and saved.in_order == [part]
     finally:
         w.destroy()
+
+
+def test_next_exam_after_restart_is_not_exported_yet(setup, monkeypatch):
+    """Exported, closed, started again for the next exam (folders not
+    remembered): its rekap is "not exported yet" and saving it must not
+    suggest the previous exam's rekap file."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: False)
+    first = tmp / "rekap_pertama.xlsx"
+    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil1")).save(tmp / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        run_to_results(w)
+        w.next()
+        monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(first))
+        assert w.steps[5].export(ask_open=False)
+        w.close()
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
+
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        assert w.exam.exported_file == "" and w.exam.output_dir == ""
+        pump(w)
+        w.next()
+        w.next()
+        w.steps[2].folder.set(str(scans))
+        w.next()
+        w.steps[3].folder.set(str(tmp / "hasil2"))
+        w.next()
+        step = w.steps[4]
+        step.run_btn.invoke()
+        deadline = time.time() + 300
+        while step.proc is not None:
+            w.update()
+            time.sleep(0.05)
+            assert time.time() < deadline
+        w.next()
+        assert w.steps[5].export_info.get() == "Belum diekspor"
+        asked = []
+        monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: asked.append(k) or "")
+        w.steps[5].export(ask_open=False)
+        assert Path(asked[0]["initialdir"]) == tmp / "hasil2" and asked[0]["initialfile"] != first.name
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass
