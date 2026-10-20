@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -196,6 +196,7 @@ def main(shots, out_pdf):
                      ["Langkah 4", "Folder hasil dan nama ujian"],
                      ["Langkah 5", "Memproses LJK, memeriksa baris merah, koreksi manual"],
                      ["Langkah 6", "Rekap nilai, analisis butir soal, ekspor ke Excel"],
+                     ["Tampilan baru", "Satu layar untuk ujian berulang (percobaan)"],
                      ["Jika ada masalah", "Masalah umum dan cara mengatasinya"]], [38 * mm, W - 38 * mm])]  # fmt: skip
     story += [Spacer(1, 8), p("Cara kerja singkat", "h2"),
               p("Program membaca bulatan yang dihitamkan peserta pada hasil scan LJK, mencocokkannya dengan kunci "
@@ -484,6 +485,28 @@ def main(shots, out_pdf):
               p("Bantuan", "h2"),
               p("Tombol <b>Bantuan</b> di kiri bawah berisi panduan ini, folder data &amp; log, tautan ke halaman "
                 "unduhan versi terbaru, dan <b>Tentang</b> (versi dan lisensi)."),
+              PageBreak()]
+
+    # ---- the one-screen look
+    story += [p("Tampilan baru (percobaan)", "h1"),
+              p("Untuk ujian yang sering diulang, langkah 1 sampai 4 biasanya sudah benar. Tampilan baru "
+                "menampilkan semuanya dalam satu layar, jadi cukup klik <b>Proses LJK</b>. Coba lewat "
+                "<b>Bantuan</b> &gt; <b>Coba tampilan baru (satu layar)</b>; kembali lewat <b>Bantuan</b> &gt; "
+                "<b>Kembali ke tampilan lama</b>. Pilihan ini diingat, dan keduanya memakai pengaturan yang sama."),
+              shot("13_tampilan_baru"),
+              table([["Bagian", "Isi"],
+                     ["Empat kartu", "Template LJK, Kunci jawaban, LJK peserta, Folder hasil, masing-masing dengan "
+                      "tanda <b>Siap</b> atau <b>Belum diisi</b>. Tombol di kartu membuka langkah yang sama seperti "
+                      "di tampilan lama; <b>Simpan</b> kembali ke ringkasan, <b>Batal</b> membatalkan perubahan."],
+                     ["Scan dari scanner...", "Langsung scan. Bila belum ada folder LJK, hasil scan disimpan di "
+                      "<i>Dokumen\\Pemindai LJK\\(nama ujian)\\Scan</i>."],
+                     ["Proses LJK", "Memeriksa semua LJK lalu membuka layar Hasil: tab <b>Peserta &amp; koreksi</b> "
+                      "(langkah 5) dan <b>Analisis &amp; ekspor</b> (langkah 6)."],
+                     ["Folder hasil", "Hasil LJK yang sama diganti saat diproses ulang. Bila folder berisi hasil "
+                      "LJK lain (ujian lain), hasil baru disimpan di subfolder baru, jadi tidak ada yang tertimpa."]],
+                    [38 * mm, W - 38 * mm]),  # fmt: skip
+              note("Setelah rekap diekspor, saat program dibuka lagi template dan kunci jawaban tetap ada untuk "
+                   "ujian ulang, sedangkan nama ujian dan folder dikosongkan. <b>Ujian baru</b> mengosongkan kunci juga."),
               PageBreak()]
 
     # ---- troubleshooting

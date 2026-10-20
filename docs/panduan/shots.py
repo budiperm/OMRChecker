@@ -175,6 +175,15 @@ def main():
     w.on_close()
     w.destroy()
 
+    # the new one-screen look (Bantuan > Coba tampilan baru), same exam
+    prefs = ujian.load_prefs(work / "sesi.json")
+    prefs[ujian.PREF_DASHBOARD] = True
+    ujian.save_prefs(prefs, work / "sesi.json")
+    w = wz.run_wizard(mainloop=False, library=lib, settings=work / "sesi.json")
+    w.geometry("1280x800+0+0")
+    shot("13_tampilan_baru")
+    w.destroy()
+
 
 if __name__ == "__main__":
     main()
