@@ -970,12 +970,56 @@ def score_results(rows, errors, exam, questions, students=None, blank_source="")
         else:
             seen.setdefault(nis, []).append(res)
         if students and res.nis.strip() and res.student is None:
-            res.flags.append("No. peserta tidak ada di daftar peserta")
+            res.flags.append(NOT_LISTED + _guess_participant(res, students, results))
     for dup in (v for v in seen.values() if len(v) > 1):
         for res in dup:
             res.flags.append("No. peserta dobel: " + ", ".join(o.file_id for o in dup if o is not res))
     results.sort(key=lambda x: (not x.flags, natural_key(x.kelas), natural_key(x.name), x.file_id))
     return results
+
+
+NOT_LISTED = "No. peserta tidak ada di daftar peserta"
+
+
+def _close_numbers(a, b):
+    """Whether two numbers differ by one digit (wrong, missing or extra) or
+    by two neighbouring digits swapped: a likely mis-marked number."""
+    if a == b:
+        return False
+    if len(a) == len(b):
+        diff = [i for i in range(len(a)) if a[i] != b[i]]
+        return len(diff) == 1 or (len(diff) == 2 and diff[1] == diff[0] + 1
+                                  and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]])  # fmt: skip
+    short, long_ = sorted((a, b), key=len)
+    return len(long_) - len(short) == 1 and any(long_[:i] + long_[i + 1:] == short for i in range(len(long_)))
+
+
+def _guess_participant(res, students, results):
+    """' (mungkin <No. Peserta> <Nama>?)' for a sheet whose number is not in
+    the list: the participant without a sheet whose name matches the name on
+    the sheet, or else the only one whose number is one slip away."""
+    taken = {id(r.student) for r in results if r.student is not None}
+    free = [s for s in students if id(s) not in taken and s.get("nis")]
+    name = normalize_name(res.info.get("Nama", ""))
+    found = [s for s in free if name and normalize_name(s.get("nama")) == name]
+    if not found:
+        nis = normalize_nis(res.nis)
+        found = [s for s in free if _close_numbers(nis, normalize_nis(s["nis"]))]
+    if len(found) != 1:
+        return ""
+    s = found[0]
+    return f" (mungkin {s['nis']}{' ' + s['nama'] if s.get('nama') else ''}?)"
+
+
+def duplicate_numbers(students):
+    """No. Peserta that appear more than once in the participant list."""
+    seen, dup = set(), []
+    for s in students:
+        n = normalize_nis(s.get("nis"))
+        if n and n in seen and s["nis"] not in dup:
+            dup.append(s["nis"])
+        seen.add(n)
+    return dup
 
 
 def _upgrade_corrections(exam, rows):
@@ -1157,42 +1201,95 @@ def load_students(path, columns=None):
 # ---------------------------------------------------------------------------
 
 
+MIN_DISCRIMINATION = 5  # sheets needed for a discrimination figure
+MIN_ITEM_NOTES = 10  # sheets needed before a question is pointed at
+
+
+def _item_groups(results, exam):
+    """[(code, graded results)]: one group per exam code when the exam reads a
+    code column and has more than one key (the codes may order the questions
+    differently), otherwise one group ("") with every graded sheet."""
+    graded = [r for r in results if r.grade is not None]
+    codes = active_codes(exam)
+    if not exam.code_column or len(codes) < 2:
+        return [("", graded)]
+    groups = [(c, [r for r in graded if r.code == c]) for c in sorted(codes, key=natural_key)]
+    return [(c, rs) for c, rs in groups if rs]
+
+
+def _top_size(group):
+    return max(1, round(len(group) * 0.27))
+
+
+def discrimination(group, correct):
+    """Daya beda: share correct in the top 27% (by grade) minus the bottom
+    27%, from -1 to 1. None with too few sheets to say."""
+    if len(group) < MIN_DISCRIMINATION:
+        return None
+    ranked = sorted(group, key=lambda r: -r.grade)
+    n = _top_size(ranked)
+    top = sum(correct(r) for r in ranked[:n]) / n
+    bottom = sum(correct(r) for r in ranked[-n:]) / n
+    return round(top - bottom, 2)
+
+
 def item_analysis(results, exam, questions):
+    """One row per question (per exam code when the codes have their own
+    keys): % correct, difficulty, discrimination, the answer chosen most and
+    how often each option was chosen. `catatan` points at questions worth a
+    second look: a key that may be mistyped, or a negative discrimination."""
     sections = as_sections(questions)
     rows = []
-    graded = [r for r in results if r.grade is not None]
-    for sec, labels in sections.items():
-        for i, q in enumerate(labels):
-            counts = {o: 0 for o in OPTIONS_ORDER}
-            counts.update({"Kosong": 0, "Ganda": 0})
-            right = total = 0
-            for r in graded:
-                key = (keys_for(exam, r.code) or {}).get(sec, "")
-                if i >= len(key):
+    for code, group in _item_groups(results, exam):
+        for sec, labels in sections.items():
+            for i, q in enumerate(labels):
+                counts = {o: 0 for o in OPTIONS_ORDER}
+                counts.update({"Kosong": 0, "Ganda": 0})
+                answered = {}  # result -> answer counted (not counted = blank) is right
+                given = {}  # result -> that answer
+                for r in group:
+                    key = (keys_for(exam, r.code) or {}).get(sec, "")
+                    if i >= len(key):
+                        continue
+                    a = "" if q in r.skipped else r.answers[q]
+                    if a == "":
+                        counts["Kosong"] += 1
+                    elif len(a) > 1:
+                        counts["Ganda"] += 1
+                    else:
+                        counts[a] = counts.get(a, 0) + 1
+                    answered[id(r)] = a == key[i]
+                    given[id(r)] = a
+                if not answered:
                     continue
-                a = "" if q in r.skipped else r.answers[q]  # not counted = blank
-                if a == "":
-                    counts["Kosong"] += 1
-                elif len(a) > 1:
-                    counts["Ganda"] += 1
-                else:
-                    counts[a] = counts.get(a, 0) + 1
-                total += 1
-                right += a == key[i]
-            if not total:
-                continue
-            pct = round(right / total * 100, 1)
-            level = "Mudah" if pct > 70 else "Sedang" if pct >= 30 else "Sukar"
-            per_code = {}
-            for code in active_codes(exam):
-                k = (keys_for(exam, code) or {}).get(sec, "")
-                if i < len(k):
-                    per_code[code] = k[i]
-            key_text = per_code.get(ALL_CODES) or ", ".join(f"{c}: {v}" for c, v in sorted(per_code.items()))
-            weights, _ = parse_weights(exam.weights.get(sec, ""))
-            rows.append({"bagian": sec, "soal": question_label(sec, q), "kunci": key_text,
-                         "bobot": weights.get(i + 1, exam.correct),
-                         "benar": pct, "kategori": level, **counts})  # fmt: skip
+                pct = round(sum(answered.values()) / len(answered) * 100, 1)
+                level = "Mudah" if pct > 70 else "Sedang" if pct >= 30 else "Sukar"
+                per_code = {}
+                for c in [code] if code else active_codes(exam):
+                    k = (keys_for(exam, c) or {}).get(sec, "")
+                    if i < len(k):
+                        per_code[c] = k[i]
+                key_text = per_code.get(code or ALL_CODES) or ", ".join(f"{c}: {v}" for c, v in sorted(per_code.items()))
+                chosen = {o: n for o, n in counts.items() if o not in ("Kosong", "Ganda") and n}
+                top = max(chosen.values(), default=0)
+                most = "/".join(o for o, n in chosen.items() if n == top)
+                sheets = [r for r in group if id(r) in answered]
+                power = discrimination(sheets, lambda r: answered[id(r)])
+                notes = []
+                if len(sheets) >= MIN_ITEM_NOTES and len(per_code) == 1 and len(most) == 1 and most != key_text:
+                    # a mistyped key: the best sheets mostly agree on another answer
+                    best = sorted(sheets, key=lambda r: -r.grade)[: _top_size(sheets)]
+                    picks = [given[id(r)] for r in best]
+                    if picks.count(most) * 2 >= len(picks) and picks.count(most) > picks.count(key_text):
+                        notes.append(f"Cek kunci: kebanyakan peserta, juga yang nilainya tertinggi, memilih {most}, "
+                                     f"bukan {key_text}")  # fmt: skip
+                if len(sheets) >= MIN_ITEM_NOTES and power is not None and power <= -0.2:
+                    notes.append("Daya beda negatif: peserta bernilai rendah lebih banyak yang benar")
+                weights, _ = parse_weights(exam.weights.get(sec, ""))
+                rows.append({"kode": code, "bagian": sec, "soal": question_label(sec, q), "kunci": key_text,
+                             "bobot": weights.get(i + 1, exam.correct), "benar": pct, "kategori": level,
+                             "daya_beda": power, "terbanyak": most, "catatan": "; ".join(notes),
+                             **counts})  # fmt: skip
     return rows
 
 
@@ -1401,10 +1498,23 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     # Analisis butir
     ws = wb.create_sheet("Analisis Butir")
     analysis = item_analysis(results, exam, sections)
-    headers = ["Soal", "Kunci", "Bobot", "% Benar", "Kategori"] + OPTIONS_ORDER + ["Kosong", "Ganda"]
-    table(ws, 1, headers, [[a["soal"], a["kunci"], a["bobot"], a["benar"], a["kategori"]]
-                           + [a[o] for o in OPTIONS_ORDER + ["Kosong", "Ganda"]]
-                           for a in analysis])  # fmt: skip
+    by_code = any(a["kode"] for a in analysis)
+    counted = OPTIONS_ORDER + ["Kosong", "Ganda"]
+    headers = (["Kode Naskah"] if by_code else []) + ["Soal", "Kunci", "Bobot", "% Benar", "Kategori",
+                                                      "Daya Beda", "Terbanyak"] + counted + ["Catatan"]  # fmt: skip
+    table(ws, 1, headers, [([a["kode"]] if by_code else []) + [a["soal"], a["kunci"], a["bobot"], a["benar"],
+                           a["kategori"], a["daya_beda"], a["terbanyak"]] + [a[o] for o in counted] + [a["catatan"]]
+                           for a in analysis], {"Catatan": 60})  # fmt: skip
+    for i, a in enumerate(analysis, 2):
+        if a["catatan"]:
+            for c in range(1, len(headers) + 1):
+                ws.cell(i, c).fill = yellow
+    end = len(analysis) + 3
+    ws.cell(end, 1, "Daya Beda: selisih persentase benar kelompok nilai tertinggi (27%) dan terendah (27%), "
+                    "dari -1 sampai 1. Di atas 0,3 baik; di bawah 0,2 soal kurang membedakan; "
+                    f"negatif perlu dicek. Dihitung bila ada minimal {MIN_DISCRIMINATION} LJK.")
+    ws.cell(end + 1, 1, f"Kuning: soal yang perlu dicek (kunci mungkin salah ketik, atau daya beda negatif); "
+                        f"ditandai bila ada minimal {MIN_ITEM_NOTES} LJK.")
 
     if students:
         ws = wb.create_sheet("Tidak Ikut Ujian")
@@ -1482,9 +1592,11 @@ def _report_html(r, exam, sections, title, total):
     )
 
 
-def export_reports_pdf(path, results, exam, questions, title=""):
+def export_reports_pdf(path, results, exam, questions, title="", separate=False):
     """One A4 page (or more) per graded sheet: identity, score, rank and every
-    answer next to the key. Unreadable sheets are left out."""
+    answer next to the key. Unreadable sheets are left out. `separate`: `path`
+    is a folder that gets one PDF per participant ("<No. Peserta> <Nama>.pdf",
+    to hand out one by one); returns the files written."""
     try:
         import pymupdf as fitz
     except ImportError:
@@ -1493,22 +1605,39 @@ def export_reports_pdf(path, results, exam, questions, title=""):
     sections = as_sections(questions)
     results = order_results([r for r in results if not r.unreadable], exam.rekap_order)
     total = sum(1 for r in results if r.rank)
-    path = Path(path)
-    writer = fitz.DocumentWriter(str(path))
     page = fitz.paper_rect("a4")
     where = page + (36, 36, -36, -36)
-    try:
-        for r in results:
-            story = fitz.Story(html=_report_html(r, exam, sections, title, total), user_css=REPORT_CSS)
-            more = True
-            while more:
-                dev = writer.begin_page(page)
-                more, _ = story.place(where)
-                story.draw(dev)
-                writer.end_page()
-    finally:
-        writer.close()
-    return path
+
+    def write(target, sheets):
+        writer = fitz.DocumentWriter(str(target))
+        try:
+            for r in sheets:
+                story = fitz.Story(html=_report_html(r, exam, sections, title, total), user_css=REPORT_CSS)
+                more = True
+                while more:
+                    dev = writer.begin_page(page)
+                    more, _ = story.place(where)
+                    story.draw(dev)
+                    writer.end_page()
+        finally:
+            writer.close()
+
+    path = Path(path)
+    if not separate:
+        write(path, results)
+        return path
+    path.mkdir(parents=True, exist_ok=True)
+    files, used = [], set()
+    for r in results:
+        stem = safe_name(" ".join(p for p in (r.nis.strip(), r.name) if p) or Path(r.file_id).stem)
+        name, n = stem, 1
+        while name.lower() in used:  # same number and name twice: keep both
+            n += 1
+            name = f"{stem} ({n})"
+        used.add(name.lower())
+        write(path / f"{name}.pdf", [r])
+        files.append(path / f"{name}.pdf")
+    return files
 
 
 def _identity_columns(results):
