@@ -356,22 +356,38 @@ def test_rekap_order_and_participant_reports(setup, monkeypatch):
     lib, scans, tmp = setup
     monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
     monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: False)
-    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil")).save(tmp / "sesi.json")
+    names = tmp / "peserta.csv"  # one listed twice, one without a sheet
+    names.write_text("No. Peserta,Nama\n1,Ani\n1,Ani lagi\n99,Tidak Datang\n", encoding="utf-8")
+    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil"), students_file=str(names),
+               students_cols={"nis": "No. Peserta", "nama": "Nama"}).save(tmp / "sesi.json")  # fmt: skip
     w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
     try:
         run_to_results(w)
+        assert "No. Peserta dobel di daftar: 1" in w.steps[2].student_info.get()
         w.next()
         step = w.steps[5]
+        assert "tidak ikut: " in step.stats.get() and step.absent_row.winfo_manager() == "pack"
+        dialog = step.show_absent()
+        pump(w)
+        tree = next(c for c in iter_widgets(dialog) if isinstance(c, wz.ttk.Treeview))
+        assert "99" in [str(tree.item(i)["values"][0]) for i in tree.get_children()]
+        dialog.destroy()
+        assert step.tree.get_children() and step.analysis[0]["terbanyak"]
         step.order.set(ujian.RANK_ORDERS["nilai"])
         step.on_order()
         assert w.exam.rekap_order == "nilai"
         pdf = tmp / "laporan.pdf"
         monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(pdf))
+        monkeypatch.setattr(wz.ChoiceDialog, "ask", classmethod(lambda cls, *a, **k: "satu"))
         step.export_reports()
         import fitz
 
         with fitz.open(str(pdf)) as doc:
             assert doc.page_count == 2  # the empty page has no report
+        monkeypatch.setattr(wz.ChoiceDialog, "ask", classmethod(lambda cls, *a, **k: "pisah"))
+        monkeypatch.setattr(wz.filedialog, "askdirectory", lambda **k: str(tmp / "kirim"))
+        step.export_reports()
+        assert len(list((tmp / "kirim").glob("*/*.pdf"))) == 2
         csv_path = tmp / "rekap.csv"
         monkeypatch.setattr(wz.messagebox, "showinfo", lambda *a, **k: None)
         monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(csv_path))

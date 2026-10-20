@@ -357,11 +357,61 @@ def test_item_analysis():
         row("c.jpg", list("EDCBA"), KodeSoal="102", NIS="3"),
     ]
     results = ujian.score_results(rows, [], exam(), Q5)
-    items = {a["soal"]: a for a in ujian.item_analysis(results, exam(), Q5)}
-    assert items["1"]["benar"] == 100.0 and items["1"]["kategori"] == "Mudah"
-    assert items["2"]["benar"] == pytest.approx(66.7)
-    assert (items["3"]["Kosong"], items["4"]["Ganda"]) == (1, 1)
-    assert items["1"]["kunci"] == "101: A, 102: E"
+    items = {(a["kode"], a["soal"]): a for a in ujian.item_analysis(results, exam(), Q5)}
+    # each exam code gets its own rows: its questions may be in another order
+    assert items["101", "1"]["benar"] == 100.0 and items["101", "1"]["kategori"] == "Mudah"
+    assert items["101", "2"]["benar"] == 50.0
+    assert (items["101", "3"]["Kosong"], items["101", "4"]["Ganda"]) == (1, 1)
+    assert (items["101", "1"]["kunci"], items["102", "1"]["kunci"]) == ("A", "E")
+    assert items["102", "1"]["benar"] == 100.0
+    # one key for every sheet: one row per question
+    e = ujian.Exam(keys={ujian.ALL_CODES: "ABCDE"})
+    items = ujian.item_analysis(ujian.score_results(rows, [], e, Q5), e, Q5)
+    assert [a["kode"] for a in items] == [""] * 5 and items[1]["benar"] == pytest.approx(33.3)
+
+
+def test_item_analysis_points_at_doubtful_questions():
+    e = ujian.Exam(keys={ujian.ALL_CODES: "ABCDE"})
+    sheets = (  # q2's key says B, but everyone chose C; q3: weaker sheets get it right more
+        [["A", "C", "D", "D", "E"]] * 4 + [["A", "C", "D", "D", ""]] * 3 + [["", "C", "C", "", ""]] * 3
+    )
+    results = ujian.score_results([row(f"{i}.jpg", a, NIS=str(i)) for i, a in enumerate(sheets)], [], e, Q5)
+    items = {a["soal"]: a for a in ujian.item_analysis(results, e, Q5)}
+    assert items["2"]["terbanyak"] == "C" and items["2"]["catatan"].startswith("Cek kunci")
+    assert items["3"]["daya_beda"] == -1 and "Daya beda negatif" in items["3"]["catatan"]
+    assert items["4"]["daya_beda"] == 1 and items["4"]["catatan"] == ""
+    assert items["1"]["catatan"] == "" and items["5"]["catatan"] == ""
+    # fewer sheets: discrimination from 5, notes only from 10
+    some = ujian.item_analysis(results[:4] + results[-2:], e, Q5)
+    assert some[3]["daya_beda"] == 1 and not any(a["catatan"] for a in some)
+    few = ujian.item_analysis(results[:3], e, Q5)
+    assert all(a["daya_beda"] is None and not a["catatan"] for a in few)
+
+
+def test_wrong_number_suggests_the_participant():
+    students = [
+        {"nis": "1001", "nama": "Ani"},
+        {"nis": "1002", "nama": "Budi"},
+        {"nis": "2050", "nama": "Cici"},
+        {"nis": "3000", "nama": "Dedi"},
+        {"nis": "3000", "nama": "Dedi Lagi"},
+    ]
+    assert ujian.duplicate_numbers(students) == ["3000"]
+    rows = [
+        row("a.jpg", list("ABCDE"), NIS="1001"),
+        row("b.jpg", list("ABCDE"), NIS="2005"),  # 2050 with two digits swapped
+        row("c.jpg", list("ABCDE"), NIS="1003"),  # 1002 (free) or 1001 (taken): only one guess
+        row("d.jpg", list("ABCDE"), NIS="9999", Nama="DEDI"),  # name on the sheet wins
+        row("e.jpg", list("ABCDE"), NIS="7777"),  # nothing close
+    ]
+    e = ujian.Exam(keys={ujian.ALL_CODES: "ABCDE"})
+    res = {r.file_id: r for r in ujian.score_results(rows, [], e, Q5, students)}
+    assert res["b.jpg"].flags == ["No. peserta tidak ada di daftar peserta (mungkin 2050 Cici?)"]
+    assert res["c.jpg"].flags == ["No. peserta tidak ada di daftar peserta (mungkin 1002 Budi?)"]
+    assert res["d.jpg"].flags == ["No. peserta tidak ada di daftar peserta (mungkin 3000 Dedi?)"]
+    assert res["e.jpg"].flags == ["No. peserta tidak ada di daftar peserta"]
+    assert ujian._close_numbers("123", "1234") and ujian._close_numbers("1234", "134")
+    assert not ujian._close_numbers("1234", "1234") and not ujian._close_numbers("1234", "4321")
 
 
 def test_export_excel(tmp_path):
@@ -388,7 +438,10 @@ def test_export_excel(tmp_path):
     flagged_row = next(r for r in range(6, 8) if ws.cell(r, 2).value == "2")
     assert ws.cell(flagged_row, 1).fill.fgColor.rgb.endswith("F8CBAD")  # not in list -> red
     assert [c.value for c in wb["Tidak Ikut Ujian"][2]] == [1, "9", "Absen", "9A"]
-    assert [c.value for c in wb["Analisis Butir"][1]][:3] == ["Soal", "Kunci", "Bobot"]
+    ana = wb["Analisis Butir"]
+    assert [c.value for c in ana[1]][:8] == ["Kode Naskah", "Soal", "Kunci", "Bobot", "% Benar", "Kategori",
+                                              "Daya Beda", "Terbanyak"]  # fmt: skip
+    assert [c.value for c in ana[1]][-1] == "Catatan"
     jaw = wb["Jawaban"]
     r2 = next(r for r in range(2, 4) if jaw.cell(r, 1).value == "2")
     assert jaw.cell(r2, 5).fill.fgColor.rgb.endswith("EDEDED")  # blank q2: grey
@@ -420,6 +473,14 @@ def test_participant_reports_pdf(tmp_path):
         text = doc[0].get_text()
     for expected in ("Tes Rekrutmen", "ANI", "No. Peserta", "Nilai", "Peringkat", "Lulus"):
         assert expected in text, expected
+    # one file per participant, named after number and name
+    rows.append(row("b.jpg", list("ABCDE"), KodeSoal="101", NIS="2", Nama="BUDI"))
+    rows.append(row("c.jpg", list("ABCDE"), KodeSoal="101", NIS="2", Nama="BUDI"))
+    results = ujian.score_results(rows, [], e, Q5)
+    files = ujian.export_reports_pdf(tmp_path / "per peserta", results, e, Q5, separate=True)
+    assert sorted(f.name for f in files) == ["1 ANI.pdf", "2 BUDI (2).pdf", "2 BUDI.pdf"]
+    with fitz.open(str(tmp_path / "per peserta" / "1 ANI.pdf")) as doc:
+        assert doc.page_count == 1 and "ANI" in doc[0].get_text()
 
 
 def test_template_file_roundtrip(tmp_path):
