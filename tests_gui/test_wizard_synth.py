@@ -24,6 +24,12 @@ import ujian  # noqa: E402
 from test_template_builder import label_like_user  # noqa: E402
 
 
+def iter_widgets(w):
+    for c in w.winfo_children():
+        yield c
+        yield from iter_widgets(c)
+
+
 def pump(w, n=10):
     for _ in range(n):
         w.update()
@@ -366,6 +372,17 @@ def test_rekap_order_and_participant_reports(setup, monkeypatch):
 
         with fitz.open(str(pdf)) as doc:
             assert doc.page_count == 2  # the empty page has no report
+        csv_path = tmp / "rekap.csv"
+        monkeypatch.setattr(wz.messagebox, "showinfo", lambda *a, **k: None)
+        monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(csv_path))
+        assert step.export_csv()
+        import csv
+
+        with csv_path.open(encoding="utf-8-sig", newline="") as f:
+            table = list(csv.reader(f))
+        assert table[0][:3] == ["No", "No. Peserta", "Nama"] and "Nilai" in table[0]
+        assert table[0][-1].startswith("Jawaban ") and len(table) == 1 + len(step.results)
+        assert w.exam.exported_file == str(csv_path) and not w.export_pending()
     finally:
         try:
             w.destroy()
@@ -593,5 +610,85 @@ def test_key_step_drops_keys_of_other_templates(setup, monkeypatch):
         assert w.current == 2, errors
         assert w.exam.keys[ujian.ALL_CODES] == {part: "A"}
         assert w.exam.weights == {}
+    finally:
+        w.destroy()
+
+
+def test_key_step_in_order_checkbox(setup, monkeypatch):
+    """Step 2: 'Harus diisi berurutan' per part, off by default, kept when the
+    step is left and shown again, and dropped for parts of other templates."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    errors = []
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: errors.append(a[1]))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        w.exam.in_order = ["Hilang"]  # part of an earlier template
+        w.next()
+        step = w.steps[1]
+        boxes = [b for b in iter_widgets(step.keys_frame)
+                 if isinstance(b, wz.ttk.Checkbutton) and "berurutan" in str(b.cget("text"))]  # fmt: skip
+        assert len(boxes) == len(step.texts) and not any(v.get() for v in step.in_order.values())
+        first = next(iter(step.texts))
+        step.texts[first].insert("1.0", "ABCDE")
+        step.on_key_edit(first)
+        boxes[0].invoke()
+        assert step.in_order[first].get() and w.exam.in_order == ["Hilang", first]
+        w.next()
+        assert w.current == 2, errors
+        assert w.exam.in_order == [first]
+        w.back()
+        assert step.in_order[first].get()
+        boxes = [b for b in iter_widgets(step.keys_frame)
+                 if isinstance(b, wz.ttk.Checkbutton) and "berurutan" in str(b.cget("text"))]  # fmt: skip
+        boxes[0].invoke()
+        assert w.exam.in_order == []
+    finally:
+        w.destroy()
+
+
+def test_each_template_keeps_its_own_keys(setup, monkeypatch):
+    """Keys typed in step 2 stay with the template chosen in step 1: another
+    template starts empty, and going back to the first brings its keys back."""
+    import shutil
+
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    shutil.copytree(lib / "LJK Sintetis", lib / "LJK Kedua")
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        first = w.steps[0]
+        paths = [str(t.path) for t in first.templates]
+        first.tree.selection_set("0")
+        w.next()
+        step = w.steps[1]
+        part = next(iter(step.texts))
+        step.texts[part].insert("1.0", "ABCDE")
+        step.on_key_edit(part)
+        step.weights[part].set("1-2:2")
+        step.in_order[part].set(True)
+        step.on_in_order(part)
+        w.back()
+        first.tree.selection_set("1")
+        w.next()
+        assert w.exam.template == paths[1]
+        assert step.texts[part].get("1.0", "end").strip() == "" and not step.in_order[part].get()
+        assert step.weights[part].get() == "" and w.exam.keys == {}
+        w.back()
+        first.tree.selection_set("0")
+        w.next()
+        assert w.exam.template == paths[0]
+        assert step.texts[part].get("1.0", "end").strip() == "ABCDE"
+        assert step.weights[part].get() == "1-2:2" and step.in_order[part].get()
+        w.next()
+        saved = ujian.Exam.load(tmp / "sesi.json")
+        assert saved.keys[ujian.ALL_CODES] == {part: "ABCDE"} and saved.in_order == [part]
     finally:
         w.destroy()

@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.2.2"
+VERSION = "1.3.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -37,7 +37,7 @@ BADGE = (232, 89, 12)
 CALLOUTS = {  # each marker sits on the top-left corner of what it points at
     "01_template": [(296, 155), (280, 684), (1147, 753)],
     "02_editor": [(10, 8), (700, 84), (692, 466), (1146, 564), (700, 703), (700, 743)],
-    "03_kunci": [(280, 108), (496, 198), (656, 255), (280, 676)],
+    "03_kunci": [(280, 108), (496, 198), (656, 248), (280, 676)],
     "04_folder": [(808, 137), (889, 137), (1060, 137), (296, 181), (285, 232), (293, 617)],
     "05_scan_dialog": [(22, 30), (22, 90), (22, 182), (22, 218), (460, 390)],
     "06_hasil": [(293, 137), (293, 219), (296, 262)],
@@ -285,10 +285,16 @@ def main(shots, out_pdf):
                         "Penghitung di kanan atas (mis. <i>60 / 60 terisi</i>) memberi tahu bila kunci kurang atau "
                         "kelebihan.",
                         "<b>Bobot benar</b> (opsional): nilai berbeda per nomor soal, mis. <font name='Courier'>"
-                        "1-10:2, 11-20:1</font> artinya soal 1–10 bernilai 2 dan soal 11–20 bernilai 1.",
+                        "1-10:2, 11-20:1</font> artinya soal 1–10 bernilai 2 dan soal 11–20 bernilai 1. "
+                        "Centang <b>Harus diisi berurutan</b> untuk bagian yang wajib diisi tanpa lompat: begitu ada "
+                        "soal kosong, jawaban sesudahnya di bagian itu tidak dihitung (dinilai seperti kosong). "
+                        "Misalnya 20 soal dan soal 9 kosong, maka jawaban soal 10–20 tidak dihitung.",
                         "<b>Penilaian</b>: poin untuk jawaban benar, salah, dan kosong; centang <b>Nilai dalam skala "
                         "0-100</b> untuk nilai akhir 0–100; isi <b>Nilai batas lulus</b> bila ingin tahu jumlah peserta yang lulus."]),
               note("Nilai salah boleh negatif (mis. -0,25) bila ujian memakai sistem pengurangan nilai."),
+              note("Kunci, bobot, dan pilihan berurutan menempel pada template yang dipilih di Langkah 1. Bila "
+                   "template diganti, kunci template lain tidak ikut terbawa; kembali ke template semula, kuncinya "
+                   "muncul lagi."),
               PageBreak()]
 
     # ---- step 3
@@ -374,7 +380,10 @@ def main(shots, out_pdf):
                      ["No. peserta kosong / tidak ada di daftar peserta", "Periksa nomor peserta di LJK, lalu betulkan lewat Koreksi."],
                      ["No. peserta dobel", "Dua LJK memakai nomor peserta yang sama. Periksa kedua lembar."],
                      ["Nama tidak ada di daftar peserta", "Cocokkan dengan daftar peserta, betulkan lewat Koreksi."],
-                     ["Kode naskah tidak punya kunci jawaban", "Isi kunci untuk kode itu di Langkah 2."]],
+                     ["Kode naskah tidak punya kunci jawaban", "Isi kunci untuk kode itu di Langkah 2."],
+                     ["Soal ... kosong: ... jawaban sesudahnya tidak dihitung",
+                      "Bagian itu harus diisi berurutan. Periksa gambar: bila soal itu sebenarnya diisi tapi tipis, "
+                      "betulkan lewat Koreksi."]],
                     [70 * mm, W - 70 * mm]),  # fmt: skip
               PageBreak(),
               p("Koreksi manual", "h2"),
@@ -396,6 +405,8 @@ def main(shots, out_pdf):
                         "<b>Analisis butir soal</b>: persentase benar tiap soal dan sebaran jawaban A–E. Kategori: "
                         "<b>Mudah</b> (lebih dari 70% benar), <b>Sedang</b> (30–70%), <b>Sukar</b> (kurang dari 30%).",
                         "<b>Ekspor ke Excel...</b> menyimpan rekap lengkap, termasuk kolom <b>Peringkat</b>. "
+                        "<b>Ekspor CSV...</b> menyimpan rekap yang sama plus jawaban tiap soal dalam satu tabel CSV "
+                        "(dipisah koma) untuk diimpor ke program lain. "
                         "<b>Laporan per peserta (PDF)...</b> membuat satu halaman hasil untuk setiap peserta (identitas, "
                         "nilai, peringkat, dan jawaban dibandingkan dengan kunci) yang siap dicetak atau dibagikan. "
                         "<b>Urutan rekap &amp; laporan</b> mengatur urutan baris: nilai tertinggi dulu, kelompok lalu "
@@ -408,7 +419,8 @@ def main(shots, out_pdf):
               table([["Sheet", "Isi"],
                      ["Rekap Nilai", "Nama, No. Peserta, kelompok, jumlah benar/salah/kosong dan nilai per bagian, "
                                      "nilai akhir, peringkat"],
-                     ["Jawaban", "Jawaban setiap peserta untuk setiap soal"],
+                     ["Jawaban", "Jawaban setiap peserta untuk setiap soal (kuning: tidak dihitung karena ada "
+                                 "soal kosong sebelumnya di bagian yang harus berurutan)"],
                      ["Analisis Butir", "Tingkat kesukaran dan sebaran jawaban tiap soal"],
                      ["Tidak Ikut Ujian", "Peserta di daftar peserta yang tidak punya LJK (bila daftar peserta dipakai)"]],
                     [38 * mm, W - 38 * mm]),  # fmt: skip
