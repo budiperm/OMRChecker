@@ -571,7 +571,8 @@ def test_remember_folder_checkboxes(setup, monkeypatch):
         assert w.current == 2 and w.steps[2].folder.get() == ""
         # check "remember" in step 3: saved right away as a preference
         w.steps[2].remember.invoke()
-        assert ujian.load_prefs(tmp / "sesi.json") == {ujian.PREF_SCANS: True, ujian.PREF_OUTPUT: False}
+        assert ujian.load_prefs(tmp / "sesi.json") == {ujian.PREF_SCANS: True, ujian.PREF_OUTPUT: False,
+                                                     ujian.PREF_DASHBOARD: False}
         w.steps[2].folder.set(str(scans))
         w.next()
         assert w.current == 3 and w.steps[3].folder.get().endswith("scan_hasil")

@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -1572,7 +1572,7 @@ class ExportStep(Step):
         return path
 
     def new_exam(self):
-        kept = any(self.wizard.prefs.values())
+        kept = any(self.wizard.prefs[k] for k in (ujian.PREF_SCANS, ujian.PREF_OUTPUT))
         cleared = "Kunci, koreksi, dan folder yang tidak diingat" if kept else "Kunci, folder, dan koreksi"
         if not messagebox.askyesno(APP_TITLE, f"Mulai ujian baru dengan template yang sama?\n({cleared} dikosongkan.)", parent=self):
             return
@@ -1873,6 +1873,11 @@ class ChoiceDialog(tk.Toplevel):
 class Wizard(tk.Tk):
     def __init__(self, library=None, settings=None):
         super().__init__()
+        self.init_state(library, settings)
+        self.build()
+
+    def init_state(self, library, settings):
+        """Window size and the exam session, shared with dashboard.Dashboard."""
         theme.apply(self)
         self.title(f"{APP_TITLE} v{VERSION}")
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
@@ -1890,13 +1895,18 @@ class Wizard(tk.Tk):
         self.prefs = ujian.load_prefs(settings)
         if self.exam.exported_file:  # finished last time: the next exam starts with fresh folders
             ujian.forget_folders(self.exam, self.prefs)
+            # and without that exam's name; template and keys stay for a repeat exam
+            # ("Ujian baru" clears the keys too)
+            self.exam.name = ""
         self.template = None
         self.students = []
         self.reprocess = False
         self.clear_old = False
         self.scans_archived = False  # step 3 archived the scans: old results must be replaced
         self.busy = False
+        self.switch = False  # closed to reopen in the other look (run_wizard)
 
+    def build(self):
         # sidebar: app name and the steps
         side = ttk.Frame(self, style="Side.TFrame", width=250)
         side.pack(side="left", fill="y")
@@ -2048,6 +2058,7 @@ class Wizard(tk.Tk):
         menu.add_command(label="Panduan (PDF)", command=self.open_guide)
         menu.add_command(label="Buka folder data & log", command=lambda: open_file(ujian.app_data_dir(), self))
         menu.add_command(label="Cek versi terbaru (halaman unduhan)", command=self.open_releases)
+        menu.add_command(label="Coba tampilan baru (satu layar)", command=self.switch_look)
         menu.add_separator()
         menu.add_command(label="Tentang Pemindai LJK", command=self.about)
         menu.update_idletasks()
@@ -2090,6 +2101,14 @@ class Wizard(tk.Tk):
         else:
             cmd = [sys.executable, str(Path(gui.__file__).resolve()), "--lanjutan"]
         subprocess.Popen(cmd)
+
+    def switch_look(self):
+        """Reopen in the other look (wizard <-> dashboard), remembered for the next start."""
+        if self.busy:
+            return
+        self.set_pref(ujian.PREF_DASHBOARD, not self.prefs.get(ujian.PREF_DASHBOARD))
+        self.switch = True
+        self.close()
 
     # closing
     def export_pending(self):
@@ -2167,7 +2186,14 @@ def run_wizard(mainloop=True, **kw):
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
-    app = Wizard(**kw)
-    if mainloop:
+    while True:
+        if ujian.load_prefs(kw.get("settings")).get(ujian.PREF_DASHBOARD):
+            from dashboard import Dashboard as cls
+        else:
+            cls = Wizard
+        app = cls(**kw)
+        if not mainloop:
+            return app
         app.mainloop()
-    return app
+        if not app.switch:
+            return app

@@ -497,6 +497,7 @@ def clear_corrections(exam):
 PREFS_FILE = "preferensi.json"  # app preferences, next to the session file
 PREF_SCANS = "ingat_folder_scan"  # keep the scan folder for the next exam
 PREF_OUTPUT = "ingat_folder_hasil"  # keep the output folder for the next exam
+PREF_DASHBOARD = "tampilan_baru"  # open the one-screen look (dashboard.py) instead of the steps
 
 
 def prefs_path(session=None):
@@ -504,8 +505,8 @@ def prefs_path(session=None):
 
 
 def load_prefs(session=None):
-    """App preferences; both folder options are off unless switched on."""
-    prefs = {PREF_SCANS: False, PREF_OUTPUT: False}
+    """App preferences; all off unless switched on."""
+    prefs = {PREF_SCANS: False, PREF_OUTPUT: False, PREF_DASHBOARD: False}
     try:
         data = json.loads(prefs_path(session).read_text(encoding="utf-8"))
     except (OSError, ValueError):
