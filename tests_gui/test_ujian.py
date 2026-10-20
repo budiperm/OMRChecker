@@ -129,6 +129,85 @@ def test_weighted_questions():
     assert res.score == 4
 
 
+def test_answers_must_be_in_order():
+    # q2 blank: q3-q5 are answered but not counted when the part is in order
+    e = ujian.Exam(keys={ujian.ALL_CODES: "ABCDE"}, unmarked=0)
+    sheet = row("a.jpg", ["A", "", "C", "D", "X"], NIS="1")
+    res = ujian.score_results([sheet], [], e, Q5)[0]
+    assert (res.correct, res.wrong, res.blank, res.ignored) == (3, 1, 1, 0) and res.flags == []
+    e.in_order = [""]
+    res = ujian.score_results([sheet], [], e, Q5)[0]
+    assert (res.correct, res.wrong, res.blank, res.ignored) == (1, 0, 1, 3)
+    assert res.skipped == ["q3", "q4", "q5"] and res.grade == 20
+    assert res.parts[""]["diabaikan"] == 3
+    assert res.flags == ["Soal 2 kosong: 3 jawaban sesudahnya tidak dihitung (harus berurutan)"]
+    # blanks at the end only: nothing to ignore
+    res = ujian.score_results([row("b.jpg", ["A", "B", "C", "", ""], NIS="2")], [], e, Q5)[0]
+    assert (res.correct, res.ignored, res.flags) == (3, 0, [])
+    # a double mark counts as filled, not as the gap
+    res = ujian.score_results([row("c.jpg", ["A", "BC", "C", "D", "E"], NIS="3")], [], e, Q5)[0]
+    assert (res.correct, res.wrong, res.ignored) == (4, 1, 0)
+    # item analysis: a not-counted answer counts as blank
+    analysis = {a["soal"]: a for a in ujian.item_analysis([ujian.score_results([sheet], [], e, Q5)[0]], e, Q5)}
+    assert analysis["3"]["Kosong"] == 1 and analysis["3"]["benar"] == 0
+
+
+def test_in_order_only_for_chosen_parts(tmp_path):
+    from openpyxl import load_workbook
+
+    questions = {"I": ["q1", "q2", "q3"], "II": ["q4", "q5"]}
+    e = ujian.Exam(keys={ujian.ALL_CODES: {"I": "ABC", "II": "DE"}}, in_order=["I"])
+    sheet = row("a.jpg", ["A", "", "C", "", "E"], NIS="1")
+    res = ujian.score_results([sheet], [], e, questions)[0]
+    assert res.parts["I"]["diabaikan"] == 1 and res.parts["II"]["diabaikan"] == 0
+    assert res.correct == 2 and res.skipped == ["q3"]
+    assert res.flags == ["Soal I-2 kosong: 1 jawaban sesudahnya tidak dihitung (harus berurutan)"]
+    path = ujian.export_excel(tmp_path / "rekap.xlsx", [res], e, questions)
+    wb = load_workbook(path)
+    header = [c.value for c in wb["Rekap Nilai"][5]]
+    assert wb["Rekap Nilai"].cell(6, header.index("Tidak dihitung") + 1).value == 1
+    jaw = wb["Jawaban"]
+    assert "Kuning" in jaw["A1"].value and jaw.cell(2, 3).value == "I-1"
+    assert jaw.cell(3, 5).fill.fgColor.rgb.endswith("FFE699")  # q3 not counted: yellow
+    assert jaw.cell(3, 4).fill.fgColor.rgb.endswith("EDEDED")  # q2 blank: grey
+    ujian.rename_section_in_exam(e, "I", "Satu", {})
+    assert e.in_order == ["Satu"]
+
+
+def test_switch_template_keeps_keys_per_template():
+    e = ujian.Exam(template="/lib/A", code_column="Kode", keys={"1": {"I": "AB"}}, weights={"I": "1:2"},
+                   in_order=["I"], corrections={"a.jpg": {"q1": "A"}})
+    ujian.switch_template(e, "/lib/A")  # same template: nothing changes
+    assert e.keys == {"1": {"I": "AB"}} and e.corrections
+    ujian.switch_template(e, "/lib/B")
+    assert (e.template, e.code_column, e.keys, e.weights, e.in_order, e.corrections) == ("/lib/B", "", {}, {}, [], {})
+    e.keys = {ujian.ALL_CODES: {"X": "C"}}
+    ujian.switch_template(e, "/elsewhere/A")  # matched by folder name (moved library)
+    assert e.code_column == "Kode" and e.keys == {"1": {"I": "AB"}} and e.weights == {"I": "1:2"}
+    assert e.in_order == ["I"] and e.template_keys == {"B": {"code_column": "", "in_order": [], "weights": {},
+                                                             "keys": {ujian.ALL_CODES: {"X": "C"}}}}
+
+
+def test_export_csv(tmp_path):
+    import csv
+
+    rows = [row("a.jpg", list("ABCDE"), KodeSoal="101", NIS="1", Nama="ANI"),
+            row("b.jpg", ["A", "", "C", "D", "A"], KodeSoal="101", NIS="2", Nama="BUDI")]
+    e = exam(kkm=75, in_order=[""])
+    results = ujian.score_results(rows, [{"file_id": "rusak.jpg"}], e, Q5)
+    path = ujian.export_csv(tmp_path / "rekap.csv", results, e, Q5)
+    assert path.read_bytes().startswith(b"\xef\xbb\xbf")
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        table = list(csv.reader(f))
+    head = table[0]
+    assert head[:5] == ["No", "No. Peserta", "Nama", "Kelompok", "Kode Naskah"]
+    assert "Tidak dihitung" in head and "Keterangan" in head and head[-5:] == [f"Jawaban {i}" for i in range(1, 6)]
+    by_nis = {r[1]: dict(zip(head, r)) for r in table[1:]}
+    assert by_nis["1"]["Nilai"] == "100.0" and by_nis["1"]["Keterangan"] == "Lulus"
+    assert by_nis["2"]["Tidak dihitung"] == "3" and by_nis["2"]["Jawaban 2"] == "" and by_nis["2"]["Jawaban 5"] == "A"
+    assert len(table) == 4 and by_nis[""]["File"] == "rusak.jpg" and by_nis[""]["Nilai"] == ""
+
+
 def test_parse_weights():
     w, problems = ujian.parse_weights("1-10:2, 11-20:1", 20)
     assert problems == [] and len(w) == 20 and w[1] == 2 and w[20] == 1

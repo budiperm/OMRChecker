@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import time
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -276,7 +277,7 @@ def rename_section(folder, old, new):
 
 
 def rename_section_in_exam(exam, old, new, mapping):
-    """Move keys, weights and corrections of a renamed part."""
+    """Move keys, weights, the in-order rule and corrections of a renamed part."""
     for code, keys in list(exam.keys.items()):
         if isinstance(keys, dict) and old in keys:
             keys = dict(keys)
@@ -284,6 +285,7 @@ def rename_section_in_exam(exam, old, new, mapping):
             exam.keys[code] = keys
     if old in exam.weights:
         exam.weights[new] = exam.weights.pop(old)
+    exam.in_order = [new if p == old else p for p in exam.in_order]
     for fid, fixes in exam.corrections.items():
         exam.corrections[fid] = {mapping.get(k, k): v for k, v in fixes.items()}
 
@@ -417,6 +419,12 @@ class Exam:
     # part -> "1-10:2, 11-20:1": points for a correct answer per question range;
     # questions not listed use `correct`
     weights: dict = field(default_factory=dict)
+    # parts that must be answered in order: after the first blank question,
+    # the answers that follow are not counted (scored as blank)
+    in_order: list = field(default_factory=list)
+    # template folder name -> its KEY_FIELDS, kept while another template is
+    # chosen so switching back brings that template's keys back (switch_template)
+    template_keys: dict = field(default_factory=dict)
     rekap_order: str = "nama"  # RANK_ORDERS key: row order of the Excel rekap
     exported_file: str = ""  # last Excel rekap written
     exported_state: str = ""  # rekap_state() at that moment
@@ -448,6 +456,26 @@ class Exam:
             return cls()
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
         return cls(**known)
+
+
+KEY_FIELDS = ("code_column", "keys", "weights", "in_order")  # what belongs to one template
+
+
+def switch_template(exam, folder):
+    """Choose another template: put the keys of the current one aside and take
+    the ones saved for `folder` (empty when it never had any). Corrections
+    are cleared: they were made on sheets read with the other template."""
+    folder = str(folder)
+    if folder == exam.template:
+        return
+    if exam.template:  # no template yet: what was typed belongs to the first one chosen
+        exam.template_keys[Path(exam.template).name] = {f: deepcopy(getattr(exam, f)) for f in KEY_FIELDS}
+        saved = exam.template_keys.pop(Path(folder).name, {})
+        blank = Exam()
+        for f in KEY_FIELDS:
+            setattr(exam, f, deepcopy(saved.get(f, getattr(blank, f))))
+    exam.template = folder
+    exam.corrections = {}
 
 
 PREFS_FILE = "preferensi.json"  # app preferences, next to the session file
@@ -643,12 +671,14 @@ class SheetResult:
     wrong: int = 0
     blank: int = 0
     multi: int = 0
+    ignored: int = 0  # answers not counted (Exam.in_order: after a blank)
     score: float = None
     grade: float = None
     passed: bool = None
     rank: int = None  # 1 = highest grade (rank_results)
-    parts: dict = field(default_factory=dict)  # part -> {benar, salah, kosong, skor, nilai}
+    parts: dict = field(default_factory=dict)  # part -> {benar, salah, kosong, diabaikan, skor, nilai}
     flags: list = field(default_factory=list)
+    skipped: list = field(default_factory=list)  # question labels of `ignored`
     student: dict = None  # matched row of the student list
     unreadable: bool = False
     corrected: bool = False
@@ -784,13 +814,20 @@ def _score_one(res, exam, sections):
         if not key:
             continue
         weights, _ = parse_weights(exam.weights.get(sec, ""))
-        part = {"benar": 0, "salah": 0, "kosong": 0}
+        part = {"benar": 0, "salah": 0, "kosong": 0, "diabaikan": 0}
         score = best = 0.0
+        gap = None  # first blank question when the part must be answered in order
         for n, (q, k) in enumerate(zip(labels, key), 1):
             a = res.answers[q]
             points = weights.get(n, exam.correct)
             best += points
-            if a == "":
+            if a and gap is not None:
+                part["diabaikan"] += 1
+                res.skipped.append(q)
+                score += exam.unmarked
+            elif a == "":
+                if sec in exam.in_order and gap is None:
+                    gap = question_label(sec, q)
                 part["kosong"] += 1
                 score += exam.unmarked
             elif a == k:
@@ -799,6 +836,8 @@ def _score_one(res, exam, sections):
             else:
                 part["salah"] += 1
                 score += exam.incorrect
+        if part["diabaikan"]:
+            res.flags.append(f"Soal {gap} kosong: {part['diabaikan']} jawaban sesudahnya tidak dihitung (harus berurutan)")
         part["skor"] = round(score, 2)
         part["nilai"] = round(part["skor"] / best * 100, 2) if exam.scale_100 and best else part["skor"]
         res.parts[sec] = part
@@ -806,6 +845,7 @@ def _score_one(res, exam, sections):
         res.correct += part["benar"]
         res.wrong += part["salah"]
         res.blank += part["kosong"]
+        res.ignored += part["diabaikan"]
     if not res.parts:
         return
     res.score = round(sum(p["skor"] for p in res.parts.values()), 2)
@@ -935,7 +975,7 @@ def item_analysis(results, exam, questions):
                 key = (keys_for(exam, r.code) or {}).get(sec, "")
                 if i >= len(key):
                     continue
-                a = r.answers[q]
+                a = "" if q in r.skipped else r.answers[q]  # not counted = blank
                 if a == "":
                     counts["Kosong"] += 1
                 elif len(a) > 1:
@@ -966,6 +1006,54 @@ def item_analysis(results, exam, questions):
 # ---------------------------------------------------------------------------
 
 
+def rekap_table(results, exam, named):
+    """Headers and rows of the "Rekap Nilai" sheet (also the CSV export),
+    `results` already in rekap order; `named`: the template's named parts."""
+    id_cols = [c for c in _identity_columns(results) if c not in ("NIS", "NoPeserta", "Nama", exam.code_column)]
+    headers = ["No", "No. Peserta", "Nama", "Kelompok", *id_cols]
+    if exam.code_column:
+        headers.append("Kode Naskah")
+    for sec in named:
+        headers += [f"Benar {sec}", f"Nilai {sec}"]
+    headers += ["Benar", "Salah", "Kosong"] + (["Tidak dihitung"] if exam.in_order else [])
+    headers += ["Skor", "Nilai", "Peringkat"]
+    if exam.kkm:
+        headers.append("Keterangan")
+    headers += ["Catatan", "File"]
+    rows = []
+    for i, r in enumerate(results, 1):
+        row = [i, r.nis, r.name, r.kelas, *[r.info.get(c, "") for c in id_cols]]
+        if exam.code_column:
+            row.append(r.code)
+        for sec in named:
+            part = r.parts.get(sec, {})
+            row += [part.get("benar"), part.get("nilai")]
+        row += [r.correct, r.wrong, r.blank] + ([r.ignored] if exam.in_order else [])
+        row += [r.score, r.grade, r.rank]
+        if exam.kkm:
+            row.append("" if r.passed is None else "Lulus" if r.passed else "Tidak lulus")
+        row += ["; ".join(r.flags), r.file_id]
+        rows.append(row)
+    return headers, rows
+
+
+def export_csv(path, results, exam, questions):
+    """The rekap as one CSV table (UTF-8, comma separated) for other
+    programs: the "Rekap Nilai" columns, then the answer to every question."""
+    sections = as_sections(questions)
+    results = order_results(results, exam.rekap_order)
+    headers, rows = rekap_table(results, exam, [s for s in sections if s])
+    labels = [(sec, q) for sec, qs in sections.items() for q in qs]
+    headers = headers + [f"Jawaban {question_label(sec, q)}" for sec, q in labels]
+    path = Path(path)
+    with path.open("w", newline="", encoding="utf-8-sig") as f:  # BOM: Excel reads the accents right
+        w = csv.writer(f)
+        w.writerow(headers)
+        for r, row in zip(results, rows):
+            w.writerow(["" if v is None else v for v in row] + [r.answers[q] for _, q in labels])
+    return path
+
+
 def export_excel(path, results, exam, questions, students=None, title=""):
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -978,6 +1066,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     head_fill = PatternFill("solid", fgColor="DDEBF7")
     red = PatternFill("solid", fgColor="F8CBAD")
     grey = PatternFill("solid", fgColor="EDEDED")
+    yellow = PatternFill("solid", fgColor="FFE699")
     wb = Workbook()
 
     def table(ws, start_row, headers, rows, widths=None):
@@ -1007,29 +1096,7 @@ def export_excel(path, results, exam, questions, students=None, title=""):
         + (f"   Lulus (batas {exam.kkm:g}): {stats['tuntas']}" if exam.kkm else "")
     )
     ws["A3"] = f"Diekspor: {time.strftime('%d-%m-%Y %H:%M')}"
-    id_cols = [c for c in _identity_columns(results) if c not in ("NIS", "NoPeserta", "Nama", exam.code_column)]
-    headers = ["No", "No. Peserta", "Nama", "Kelompok", *id_cols]
-    if exam.code_column:
-        headers.append("Kode Naskah")
-    for sec in named:
-        headers += [f"Benar {sec}", f"Nilai {sec}"]
-    headers += ["Benar", "Salah", "Kosong", "Skor", "Nilai", "Peringkat"]
-    if exam.kkm:
-        headers.append("Keterangan")
-    headers += ["Catatan", "File"]
-    rows = []
-    for i, r in enumerate(results, 1):
-        row = [i, r.nis, r.name, r.kelas, *[r.info.get(c, "") for c in id_cols]]
-        if exam.code_column:
-            row.append(r.code)
-        for sec in named:
-            part = r.parts.get(sec, {})
-            row += [part.get("benar"), part.get("nilai")]
-        row += [r.correct, r.wrong, r.blank, r.score, r.grade, r.rank]
-        if exam.kkm:
-            row.append("" if r.passed is None else "Lulus" if r.passed else "Tidak lulus")
-        row += ["; ".join(r.flags), r.file_id]
-        rows.append(row)
+    headers, rows = rekap_table(results, exam, named)
     table(ws, 5, headers, rows, {"Catatan": 50})
     for i, r in enumerate(results):
         if r.flags:
@@ -1044,14 +1111,22 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     rows = [[r.nis, r.name] + ([r.code] if exam.code_column else []) + [r.answers[q] for _, q in labels]
             for r in results]  # fmt: skip
     table(ws, 1, headers, rows)
+    if exam.in_order:
+        ws.freeze_panes = None
+        ws.insert_rows(1)
+        ws["A1"] = "Kuning: jawaban tidak dihitung karena ada soal kosong sebelumnya (harus diisi berurutan)"
+        ws.freeze_panes = "A3"
+    top = 3 if exam.in_order else 2
     for i, r in enumerate(results):
         keys = keys_for(exam, r.code) or {}
         for j, (sec, q) in enumerate(labels):
             n = sections[sec].index(q)
             key = keys.get(sec, "")
-            cell = ws.cell(2 + i, len(lead) + 1 + j)
+            cell = ws.cell(top + i, len(lead) + 1 + j)
             if r.answers[q] == "":
                 cell.fill = grey
+            elif q in r.skipped:
+                cell.fill = yellow
             elif n < len(key) and r.answers[q] != key[n]:
                 cell.fill = red
 
@@ -1091,6 +1166,7 @@ td.l {text-align: left;}
 td.ok {background-color: #d9f2df;}
 td.bad {background-color: #f8cbad;}
 td.blank {background-color: #ededed;}
+td.skip {background-color: #ffe699; text-decoration: line-through;}
 """
 
 
@@ -1107,9 +1183,11 @@ def _report_html(r, exam, sections, title, total):
     status = "" if r.passed is None else ("Lulus" if r.passed else "Tidak lulus")
     rank = f"{r.rank} dari {total}" if r.rank else "-"
     score = (
-        "<tr><th>Benar</th><th>Salah</th><th>Kosong</th><th>Skor</th><th>Nilai</th><th>Peringkat</th>"
+        "<tr><th>Benar</th><th>Salah</th><th>Kosong</th>"
+        + ("<th>Tidak dihitung</th>" if exam.in_order else "") + "<th>Skor</th><th>Nilai</th><th>Peringkat</th>"
         + ("<th>Keterangan</th>" if exam.kkm else "") + "</tr>"
         + f"<tr><td>{r.correct}</td><td>{r.wrong}</td><td>{r.blank}</td>"
+        + (f"<td>{r.ignored}</td>" if exam.in_order else "")
         + f"<td>{'' if r.score is None else f'{r.score:g}'}</td><td><b>{'' if r.grade is None else f'{r.grade:g}'}</b></td>"
         + f"<td>{rank}</td>" + (f"<td>{status}</td>" if exam.kkm else "") + "</tr>"
     )
@@ -1120,7 +1198,7 @@ def _report_html(r, exam, sections, title, total):
         for n, q in enumerate(labels):
             a = r.answers.get(q, "")
             k = key[n] if n < len(key) else ""
-            css = "blank" if a == "" else ("ok" if a == k else "bad") if k else ""
+            css = "blank" if a == "" else "skip" if q in r.skipped else ("ok" if a == k else "bad") if k else ""
             cells.append(f'<td>{esc(str(n + 1))}</td><td class="{css}">{esc(a or "-")}</td><td>{esc(k or "")}</td>')
         per_row = 4
         body = "".join("<tr>" + "".join(cells[i : i + per_row]) + "</tr>" for i in range(0, len(cells), per_row))

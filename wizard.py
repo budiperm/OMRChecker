@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.2.2"
+VERSION = "1.3.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -310,9 +310,7 @@ class TemplateStep(Step):
         if not t:
             messagebox.showinfo(APP_TITLE, "Pilih atau buat template dulu.", parent=self)
             return False
-        if str(t.path) != self.exam.template:
-            self.exam.template = str(t.path)
-            self.exam.corrections = {}
+        ujian.switch_template(self.exam, t.path)  # each template keeps its own keys
         try:
             if ujian.upgrade_template(t.path):  # templates saved by older versions
                 t = ujian.read_library_template(t.path)
@@ -390,7 +388,7 @@ class KeyStep(Step):
     def build_key_fields(self):
         for w in self.keys_frame.winfo_children():
             w.destroy()
-        self.texts, self.counters, self.weights, self.thumbs = {}, {}, {}, []
+        self.texts, self.counters, self.weights, self.in_order, self.thumbs = {}, {}, {}, {}, []
         template = self.wizard.template
         for i, (part, labels) in enumerate(template.sections.items()):
             name = f"Bagian {part}" if part else "Jawaban"
@@ -400,7 +398,7 @@ class KeyStep(Step):
             if thumb is not None:
                 photo = photo_of(thumb, 240, 110, master=row)
                 self.thumbs.append(photo)
-                tk.Label(row, image=photo, relief="solid", borderwidth=1).grid(row=0, column=0, rowspan=3, sticky="nw", padx=(0, 8))
+                tk.Label(row, image=photo, relief="solid", borderwidth=1).grid(row=0, column=0, rowspan=4, sticky="nw", padx=(0, 8))
             head = ttk.Frame(row)
             head.grid(row=0, column=1, sticky="ew")
             ttk.Label(head, text=f"{name} ({len(labels)} soal)", style="Strong.TLabel").pack(side="left")
@@ -418,8 +416,12 @@ class KeyStep(Step):
             ttk.Label(wrow, text="Bobot benar (opsional):").pack(side="left")
             ttk.Entry(wrow, textvariable=weight, width=30).pack(side="left", padx=4)
             ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", foreground=theme.MUTED).pack(side="left")
+            in_order = tk.BooleanVar(value=part in self.exam.in_order)
+            ttk.Checkbutton(row, text="Harus diisi berurutan (jawaban setelah soal kosong tidak dihitung)",
+                            variable=in_order, command=lambda p=part: self.on_in_order(p)).grid(row=3, column=1, sticky="w", pady=(2, 0))  # fmt: skip
             row.columnconfigure(1, weight=1)
             self.texts[part], self.counters[part], self.weights[part] = text, counter, weight
+            self.in_order[part] = in_order
         self.keys_frame.columnconfigure(0, weight=1)
 
     def rename(self, part):
@@ -458,6 +460,10 @@ class KeyStep(Step):
         else:
             self.exam.weights.pop(part, None)
         self.update_counter(part)
+
+    def on_in_order(self, part):
+        others = [p for p in self.exam.in_order if p != part]
+        self.exam.in_order = others + [part] if self.in_order[part].get() else others
 
     def on_mode(self):
         if self.mode.get() == "code":
@@ -558,6 +564,7 @@ class KeyStep(Step):
         for code in e.keys:
             e.keys[code] = {p: k for p, k in (ujian.keys_for(e, code) or {}).items() if p in sections}
         e.weights = {p: w for p, w in e.weights.items() if p in sections}
+        e.in_order = [p for p in e.in_order if p in sections]
         problems = []
         for part, labels in self.wizard.template.sections.items():
             _, wrong = ujian.parse_weights(e.weights.get(part, ""), len(labels))
@@ -1222,7 +1229,7 @@ class CorrectionDialog(tk.Toplevel):
 
 class ExportStep(Step):
     title = "Rekap & ekspor"
-    hint = "Ekspor rekap ke Excel: nilai per bagian, jawaban per soal, analisis butir, peserta tidak ikut."
+    hint = "Ekspor rekap ke Excel (nilai per bagian, jawaban per soal, analisis butir, peserta tidak ikut) atau ke CSV untuk program lain."
 
     def __init__(self, wizard):
         super().__init__(wizard)
@@ -1242,11 +1249,9 @@ class ExportStep(Step):
         bar = ttk.Frame(self)
         bar.pack(fill="x", pady=8)
         ttk.Button(bar, text="Ekspor ke Excel...", command=self.export, style="Accent.TButton").pack(side="left")
+        ttk.Button(bar, text="Ekspor CSV...", command=self.export_csv).pack(side="left", padx=(6, 0))
         ttk.Button(bar, text="Laporan per peserta (PDF)...", command=self.export_reports).pack(side="left", padx=6)
         ttk.Button(bar, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="left")
-        self.export_info = tk.StringVar()
-        self.export_label = ttk.Label(bar, textvariable=self.export_info, foreground=theme.MUTED)
-        self.export_label.pack(side="left", padx=8)
         ttk.Button(bar, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
         order = ttk.Frame(self)
         order.pack(fill="x")
@@ -1255,6 +1260,9 @@ class ExportStep(Step):
         self.order_box = ttk.Combobox(order, textvariable=self.order, state="readonly", width=24,
                                       values=list(ujian.RANK_ORDERS.values()))  # fmt: skip
         self.order_box.pack(side="left", padx=6)
+        self.export_info = tk.StringVar()
+        self.export_label = ttk.Label(order, textvariable=self.export_info, foreground=theme.MUTED)
+        self.export_label.pack(side="left", padx=8)
         self.order_box.bind("<<ComboboxSelected>>", lambda e: self.on_order())
 
     def show_export_status(self):
@@ -1312,6 +1320,8 @@ class ExportStep(Step):
         """Save the Excel rekap; True when written."""
         name = ujian.safe_name(f"Rekap {self.exam.name or 'Ujian'}")
         last = Path(self.exam.exported_file) if self.exam.exported_file else None
+        if last and last.suffix.lower() != ".xlsx":  # the last export was the CSV
+            last = last.with_suffix(".xlsx")
         path = filedialog.asksaveasfilename(
             parent=self, title="Simpan rekap", defaultextension=".xlsx",
             initialdir=str(last.parent) if last and last.parent.is_dir() else self.exam.output_dir,
@@ -1332,6 +1342,28 @@ class ExportStep(Step):
         self.show_export_status()
         if ask_open and messagebox.askyesno(APP_TITLE, "Rekap tersimpan. Buka sekarang?", parent=self):
             open_file(path, self)
+        return True
+
+    def export_csv(self):
+        """The rekap as CSV (nilai + every answer); counts as exported too."""
+        name = ujian.safe_name(f"Rekap {self.exam.name or 'Ujian'}")
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Simpan rekap CSV", defaultextension=".csv",
+            initialdir=self.exam.output_dir, initialfile=f"{name}.csv", filetypes=[("CSV", "*.csv")],
+        )  # fmt: skip
+        if not path:
+            return False
+        results = self.wizard.compute_results()
+        try:
+            ujian.export_csv(path, results, self.exam, self.wizard.template.sections)
+        except PermissionError:
+            messagebox.showerror(APP_TITLE, "File sedang dibuka di program lain. Tutup dulu lalu coba lagi.", parent=self)
+            return False
+        self.exam.exported_file = str(Path(path))
+        self.exam.exported_state = ujian.rekap_state(self.exam)
+        self.exam.save(self.wizard.settings)
+        self.show_export_status()
+        messagebox.showinfo(APP_TITLE, f"Rekap CSV tersimpan:\n{path}", parent=self)
         return True
 
     def new_exam(self):
@@ -1690,7 +1722,8 @@ class Wizard(tk.Tk):
         path = self.exam.exported_file
         buttons = [("folder", "Buka folder hasil", False), ("baru", "Ujian baru", False), ("tutup", "Tutup aplikasi", True)]
         if path and Path(path).exists():
-            buttons.insert(0, ("buka", "Buka rekap Excel", False))
+            kind = "CSV" if Path(path).suffix.lower() == ".csv" else "Excel"
+            buttons.insert(0, ("buka", f"Buka rekap {kind}", False))
         name = f" {self.exam.name}" if self.exam.name else ""
         choice = ChoiceDialog.ask(self, "Pemeriksaan selesai", f"Rekap nilai{name} sudah tersimpan.", buttons,
                                   detail=path or self.exam.output_dir)  # fmt: skip
