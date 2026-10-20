@@ -566,3 +566,32 @@ def test_unfinished_exam_keeps_folders(setup):
         assert w.exam.scans_dir == str(scans) and w.exam.output_dir == str(tmp / "hasil")
     finally:
         w.destroy()
+
+
+def test_key_step_drops_keys_of_other_templates(setup, monkeypatch):
+    """Keys saved for sections the active template does not have (from an
+    earlier, since deleted template) used to block step 2 with "bagian ini
+    hanya 0 soal" although nothing on screen could fix it."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    errors = []
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: errors.append(a[1]))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        w.exam.keys = {ujian.ALL_CODES: {"Motivasi1": "ABC", "Motivasi2": "ABCDABC"}}
+        w.exam.weights = {"Motivasi1": "1:2"}
+        w.next()
+        step = w.steps[1]
+        assert "Motivasi1" not in step.texts
+        part = next(iter(step.texts))
+        step.texts[part].insert("1.0", "A")
+        step.on_key_edit(part)
+        w.next()
+        assert w.current == 2, errors
+        assert w.exam.keys[ujian.ALL_CODES] == {part: "A"}
+        assert w.exam.weights == {}
+    finally:
+        w.destroy()
