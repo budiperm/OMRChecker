@@ -552,13 +552,19 @@ class KeyStep(Step):
         else:
             e.code_column = ""
             e.keys = {ujian.ALL_CODES: e.keys.get(ujian.ALL_CODES, {})}
+        # Keys and weights saved for sections of an earlier template (renamed,
+        # deleted or switched) are not shown here and would never be scored.
+        sections = self.wizard.template.sections
+        for code in e.keys:
+            e.keys[code] = {p: k for p, k in (ujian.keys_for(e, code) or {}).items() if p in sections}
+        e.weights = {p: w for p, w in e.weights.items() if p in sections}
         problems = []
         for part, labels in self.wizard.template.sections.items():
             _, wrong = ujian.parse_weights(e.weights.get(part, ""), len(labels))
             problems += [f"Bobot bagian {part or '-'}: {w}" for w in wrong]
         for code in e.keys:
             for part, key in (ujian.keys_for(e, code) or {}).items():
-                labels = self.wizard.template.sections.get(part, [])
+                labels = sections[part]
                 if len(key) > len(labels):
                     problems.append(
                         f"{'Kode ' + code + ', ' if code != ujian.ALL_CODES else ''}"
