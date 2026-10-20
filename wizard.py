@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -720,6 +720,7 @@ class ScansStep(Step):
             box.grid(row=1, column=i, sticky="ew", padx=(0, 12))
             cols.columnconfigure(i, weight=1, uniform="cols")
             self.col_vars[key], self.col_boxes[key] = var, box
+            box.bind("<<ComboboxSelected>>", lambda e: self.list_check())
         self.student_info = tk.StringVar()
         ttk.Label(s, textvariable=self.student_info, foreground=theme.MUTED).pack(anchor="w", padx=6, pady=(0, 6))
         self.students.trace_add("write", lambda *a: self.read_students())
@@ -819,7 +820,21 @@ class ScansStep(Step):
             box["values"] = [""] + headers
             if self.col_vars[k].get() not in headers:
                 self.col_vars[k].set(guess.get(k, ""))
-        self.student_info.set(f"{len(rows)} baris di daftar peserta.")
+        self.list_check()
+
+    def list_check(self):
+        """Count the participants and warn about No. Peserta listed twice
+        (only the first of them can be matched to a sheet)."""
+        path = self.students.get().strip()
+        cols = {k: v.get() for k, v in self.col_vars.items() if v.get()}
+        try:
+            students, _, _ = ujian.load_students(path, cols)
+        except Exception:  # no usable column chosen yet: leave() explains
+            self.student_info.set("")
+            return
+        dup = ujian.duplicate_numbers(students)
+        more = f" Perhatian: No. Peserta dobel di daftar: {', '.join(dup[:5])}{' ...' if len(dup) > 5 else ''}" if dup else ""
+        self.student_info.set(f"{len(students)} peserta di daftar.{more}")
 
     def leave(self):
         folder = self.folder.get().strip()
@@ -1309,13 +1324,26 @@ class ExportStep(Step):
         super().__init__(wizard)
         self.stats = tk.StringVar()
         ttk.Label(self, textvariable=self.stats, style="Big.TLabel").pack(anchor="w", pady=(0, 6))
+        self.absent_row = ttk.Frame(self)
+        self.absent_info = tk.StringVar()
+        ttk.Label(self.absent_row, textvariable=self.absent_info).pack(side="left")
+        ttk.Button(self.absent_row, text="Lihat daftarnya...", command=self.show_absent).pack(side="left", padx=8)
         f = ttk.LabelFrame(self, text="Analisis butir soal")
         f.pack(fill="both", expand=True)
-        cols = ("soal", "kunci", "bobot", "benar", "kategori", "A", "B", "C", "D", "E", "Kosong", "Ganda")
+        self.item_legend = tk.StringVar()
+        ttk.Label(f, textvariable=self.item_legend, foreground=theme.MUTED).pack(side="bottom", anchor="w", padx=6)
+        self.item_note = tk.StringVar()
+        ttk.Label(f, textvariable=self.item_note, foreground=theme.WARN).pack(side="bottom", anchor="w", padx=6)
+        cols = ("kode", "soal", "kunci", "bobot", "benar", "kategori", "daya_beda", "terbanyak",
+                "A", "B", "C", "D", "E", "Kosong", "Ganda")  # fmt: skip
+        names = {"kode": "Kode", "benar": "% Benar", "daya_beda": "Daya beda"}
         self.tree = ttk.Treeview(f, columns=cols, show="headings")
         for c in cols:
-            self.tree.heading(c, text={"benar": "% Benar"}.get(c, c.capitalize() if len(c) > 1 else c))
-            self.tree.column(c, width=90 if c in ("soal", "kunci", "kategori") else 60, anchor="center")
+            self.tree.heading(c, text=names.get(c, c.capitalize() if len(c) > 1 else c))
+            self.tree.column(c, width=80 if c in ("soal", "kunci", "kategori", "daya_beda", "terbanyak") else 55,
+                             anchor="center")  # fmt: skip
+        self.tree.tag_configure("check", background="#FFE699")
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self.show_item_note())
         vs = ttk.Scrollbar(f, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vs.set)
         self.tree.pack(side="left", fill="both", expand=True)
@@ -1358,20 +1386,37 @@ class ExportStep(Step):
         self.show_export_status()
 
     def export_reports(self):
-        name = ujian.safe_name(f"Laporan {self.exam.name or 'Ujian'}")
-        path = filedialog.asksaveasfilename(
-            parent=self, title="Simpan laporan per peserta", defaultextension=".pdf",
-            initialdir=self.exam.output_dir, initialfile=f"{name}.pdf", filetypes=[("PDF", "*.pdf")],
+        choice = ChoiceDialog.ask(
+            self, "Laporan per peserta (PDF)", "Satu halaman per peserta: nilai, jawaban, dan kunci.",
+            [("batal", "Batal", False), ("pisah", "Satu file per peserta", False), ("satu", "Satu file", True)],
+            detail="Satu file per peserta cocok untuk dikirim ke masing-masing peserta; nama file berisi "
+                   "No. Peserta dan nama.",
         )  # fmt: skip
+        if choice not in ("satu", "pisah"):
+            return
+        name = ujian.safe_name(f"Laporan {self.exam.name or 'Ujian'}")
+        if choice == "satu":
+            path = filedialog.asksaveasfilename(
+                parent=self, title="Simpan laporan per peserta", defaultextension=".pdf",
+                initialdir=self.exam.output_dir, initialfile=f"{name}.pdf", filetypes=[("PDF", "*.pdf")],
+            )  # fmt: skip
+        else:
+            folder = filedialog.askdirectory(parent=self, title="Folder untuk laporan per peserta",
+                                             initialdir=self.exam.output_dir or None, mustexist=False)  # fmt: skip
+            path = str(Path(folder) / name) if folder else ""
         if not path:
             return
         results = self.wizard.compute_results()
         try:
-            ujian.export_reports_pdf(path, results, self.exam, self.wizard.template.sections, self.exam.name)
+            ujian.export_reports_pdf(path, results, self.exam, self.wizard.template.sections, self.exam.name,
+                                     separate=choice == "pisah")  # fmt: skip
         except (OSError, RuntimeError) as e:
             messagebox.showerror(APP_TITLE, f"Laporan tidak bisa disimpan (mungkin sedang dibuka?):\n{e}", parent=self)
             return
-        if messagebox.askyesno(APP_TITLE, "Laporan tersimpan. Buka sekarang?", parent=self):
+        if choice == "pisah":
+            if messagebox.askyesno(APP_TITLE, f"Laporan tersimpan di folder:\n{path}\n\nBuka foldernya?", parent=self):
+                open_path(path)
+        elif messagebox.askyesno(APP_TITLE, "Laporan tersimpan. Buka sekarang?", parent=self):
             open_file(path, self)
 
     def enter(self):
@@ -1380,16 +1425,67 @@ class ExportStep(Step):
         self.results = results
         s = ujian.summary(results)
         missing = ""
+        self.absent = ujian.absent_students(results, self.wizard.students) if self.wizard.students else []
         if self.wizard.students:
-            missing = f"   •   tidak ikut: {len(ujian.absent_students(results, self.wizard.students))}"
+            missing = f"   •   tidak ikut: {len(self.absent)}"
+        if self.absent:
+            self.absent_info.set(f"{len(self.absent)} peserta di daftar tidak ada LJK-nya.")
+            self.absent_row.pack(fill="x", pady=(0, 6), before=self.tree.master)
+        else:
+            self.absent_row.pack_forget()
         kkm = f"   •   lulus (batas {self.exam.kkm:g}): {s['tuntas']}" if self.exam.kkm else ""
         self.stats.set(f"{s['peserta']} LJK   •   rata-rata {s['rata']}   •   tertinggi {s['tertinggi']}   "
                        f"•   terendah {s['terendah']}{kkm}{missing}   •   perlu dicek: {s['perlu_dicek']}")  # fmt: skip
         self.tree.delete(*self.tree.get_children())
-        for a in ujian.item_analysis(results, self.exam, self.wizard.template.sections):
-            self.tree.insert("", "end", values=(a["soal"], a["kunci"], f"{a['bobot']:g}", a["benar"], a["kategori"],
-                                                *[a[o] for o in ujian.OPTIONS_ORDER], a["Kosong"], a["Ganda"]))  # fmt: skip
+        self.analysis = ujian.item_analysis(results, self.exam, self.wizard.template.sections)
+        by_code = any(a["kode"] for a in self.analysis)
+        self.tree["displaycolumns"] = [c for c in self.tree["columns"] if by_code or c != "kode"]
+        for i, a in enumerate(self.analysis):
+            power = "" if a["daya_beda"] is None else f"{a['daya_beda']:g}"
+            self.tree.insert("", "end", iid=str(i), tags=("check",) if a["catatan"] else (),
+                             values=(a["kode"], a["soal"], a["kunci"], f"{a['bobot']:g}", a["benar"], a["kategori"],
+                                     power, a["terbanyak"], *[a[o] for o in ujian.OPTIONS_ORDER],
+                                     a["Kosong"], a["Ganda"]))  # fmt: skip
+        self.item_note.set("")
+        flagged = sum(1 for a in self.analysis if a["catatan"])
+        self.item_legend.set(f"Kuning: {flagged} soal perlu dicek (kunci mungkin salah ketik, atau peserta bernilai "
+                             "rendah justru lebih banyak benar). Pilih barisnya untuk melihat alasan."
+                             if flagged else "")  # fmt: skip
         self.show_export_status()
+
+    def show_absent(self):
+        """The participants on the list without a sheet, with the sheets whose
+        number is not on the list next to them (often the same people)."""
+        d = tk.Toplevel(self)
+        d.title(f"Tidak ikut ujian ({len(self.absent)})")
+        d.transient(self.winfo_toplevel())
+        f = ttk.Frame(d, padding=12)
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text="Peserta di daftar yang LJK-nya tidak ditemukan:").pack(anchor="w")
+        tree = ttk.Treeview(f, columns=("nis", "nama", "kelas"), show="headings", height=8)
+        for c, label, w in (("nis", "No. Peserta", 120), ("nama", "Nama", 300), ("kelas", "Kelompok", 120)):
+            tree.heading(c, text=label)
+            tree.column(c, width=w, anchor="w")
+        for s in self.absent:
+            tree.insert("", "end", values=(s.get("nis", ""), s.get("nama", ""), s.get("kelas", "")))
+        tree.pack(fill="both", expand=True, pady=(4, 0))
+        odd = [r for r in self.results if any(fl.startswith(ujian.NOT_LISTED) for fl in r.flags)]
+        if odd:
+            ttk.Label(f, text=f"{len(odd)} LJK nomornya tidak ada di daftar. Mungkin salah isi; betulkan lewat "
+                              "Koreksi di langkah 5:", wraplength=580, justify="left").pack(anchor="w", pady=(8, 0))  # fmt: skip
+            box = tk.Listbox(f, height=min(6, len(odd)))
+            for r in odd:
+                note = next(fl for fl in r.flags if fl.startswith(ujian.NOT_LISTED))[len(ujian.NOT_LISTED):]
+                box.insert("end", f"{r.file_id}: {r.nis}{note}")
+            box.pack(fill="x", pady=(4, 0))
+        ttk.Button(f, text="Tutup", command=d.destroy).pack(anchor="e", pady=(10, 0))
+        d.bind("<Escape>", lambda e: d.destroy())
+        return d
+
+    def show_item_note(self):
+        sel = self.tree.selection()
+        a = self.analysis[int(sel[0])] if sel else None
+        self.item_note.set(f"Soal {a['soal']}: {a['catatan']}" if a and a["catatan"] else "")
 
     def export(self, ask_open=True):
         """Save the Excel rekap; True when written."""

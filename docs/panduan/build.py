@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -322,7 +322,8 @@ def main(shots, out_pdf):
                         "Daftar file yang ditemukan. Pastikan jumlahnya sesuai jumlah LJK.",
                         "<b>Daftar peserta</b> (opsional): file Excel/CSV berisi No. Peserta (atau NIS/NIP/NIK), nama, dan kelompok (kelas/divisi). Pilih kolom yang "
                         "sesuai. Dengan daftar ini, nama dan kelompok otomatis masuk rekap, dan peserta yang tidak ikut "
-                        "ujian ikut terdaftar."]),
+                        "ujian ikut terdaftar. Bila ada No. Peserta yang tertulis dua kali di daftar, muncul peringatan "
+                        "di bawahnya."]),
               PageBreak(),
               p("Scan langsung dari scanner", "h2"),
               p("Klik <b>Scan dari scanner...</b>. Bila folder belum dipilih, program meminta Anda memilih atau membuat "
@@ -385,7 +386,9 @@ def main(shots, out_pdf):
                      ["LJK tidak terbaca (kotak sudut/halaman tidak ditemukan)",
                       "Lembar kosong, terpotong, atau buram. Scan ulang lembar itu, lalu proses lagi."],
                      ["Jawaban ganda", "Peserta menghitamkan lebih dari satu pilihan. Periksa gambar, koreksi bila perlu."],
-                     ["No. peserta kosong / tidak ada di daftar peserta", "Periksa nomor peserta di LJK, lalu betulkan lewat Koreksi."],
+                     ["No. peserta kosong / tidak ada di daftar peserta", "Periksa nomor peserta di LJK, lalu betulkan lewat Koreksi. "
+                      "Bila nomornya hanya beda satu angka (atau dua angka tertukar) dari peserta yang belum punya LJK, "
+                      "atau namanya cocok, catatan menyebut tebakannya, mis. <i>(mungkin 1002 Budi?)</i>."],
                      ["No. peserta dobel", "Dua LJK memakai nomor peserta yang sama. Periksa kedua lembar."],
                      ["Nama tidak ada di daftar peserta", "Cocokkan dengan daftar peserta, betulkan lewat Koreksi."],
                      ["Kode naskah tidak punya kunci jawaban", "Isi kunci untuk kode itu di Langkah 2."],
@@ -410,14 +413,22 @@ def main(shots, out_pdf):
     story += [shot("10_rekap"),
               numbered(["Ringkasan nilai: jumlah LJK, rata-rata, tertinggi, terendah, jumlah lulus (bila nilai batas lulus diisi), "
                         "dan yang perlu dicek.",
-                        "<b>Analisis butir soal</b>: persentase benar tiap soal dan sebaran jawaban A–E. Kategori: "
-                        "<b>Mudah</b> (lebih dari 70% benar), <b>Sedang</b> (30–70%), <b>Sukar</b> (kurang dari 30%).",
+                        "<b>Analisis butir soal</b>: persentase benar tiap soal, jawaban yang paling banyak dipilih, dan "
+                        "sebaran jawaban A–E. Kategori: <b>Mudah</b> (lebih dari 70% benar), <b>Sedang</b> (30–70%), "
+                        "<b>Sukar</b> (kurang dari 30%). <b>Daya beda</b> (minimal 5 LJK): selisih persentase benar "
+                        "kelompok nilai tertinggi dan terendah (27% masing-masing), dari -1 sampai 1; di atas 0,3 baik. "
+                        "Baris <b>kuning</b> perlu dicek: lebih banyak peserta memilih jawaban lain daripada kunci "
+                        "(kunci mungkin salah ketik), atau daya bedanya negatif. Pilih barisnya untuk melihat alasannya. "
+                        "Dengan kunci per kode naskah, analisis dibuat per kode. Bila daftar peserta dipakai dan ada "
+                        "yang tidak punya LJK, tombol <b>Lihat daftarnya...</b> menampilkan mereka.",
                         "<b>Ekspor ke Excel...</b> menyimpan rekap lengkap, termasuk kolom <b>Peringkat</b>. "
                         "<b>Ekspor CSV...</b> menyimpan rekap yang sama plus jawaban tiap soal dalam satu tabel CSV "
                         "(dipisah koma) untuk diimpor ke program lain. "
                         "<b>Ekspor lanjutan...</b> memilih sendiri kolom, urutan, dan judulnya (lihat di bawah). "
                         "<b>Laporan per peserta (PDF)...</b> membuat satu halaman hasil untuk setiap peserta (identitas, "
-                        "nilai, peringkat, dan jawaban dibandingkan dengan kunci) yang siap dicetak atau dibagikan. "
+                        "nilai, peringkat, dan jawaban dibandingkan dengan kunci) yang siap dicetak atau dibagikan: "
+                        "semuanya dalam satu file, atau satu file per peserta (nama file: No. Peserta dan nama) "
+                        "untuk dikirim ke masing-masing. "
                         "<b>Urutan rekap &amp; laporan</b> mengatur urutan baris: nilai tertinggi dulu, kelompok lalu "
                         "nama, atau nama file. <b>Buka folder hasil</b> membuka folder "
                         "berisi gambar LJK bertanda. Di bawahnya tertulis status ekspor: <i>Belum diekspor</i>, "
@@ -430,7 +441,8 @@ def main(shots, out_pdf):
                                      "nilai akhir, peringkat"],
                      ["Jawaban", "Jawaban setiap peserta untuk setiap soal (kuning: tidak dihitung karena ada "
                                  "soal kosong sebelumnya di bagian yang harus berurutan)"],
-                     ["Analisis Butir", "Tingkat kesukaran dan sebaran jawaban tiap soal"],
+                     ["Analisis Butir", "Tingkat kesukaran, daya beda, jawaban terbanyak, dan sebaran jawaban tiap "
+                                        "soal; soal yang perlu dicek berwarna kuning dengan alasannya di kolom Catatan"],
                      ["Tidak Ikut Ujian", "Peserta di daftar peserta yang tidak punya LJK (bila daftar peserta dipakai)"]],
                     [38 * mm, W - 38 * mm]),  # fmt: skip
               PageBreak(),
