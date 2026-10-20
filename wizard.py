@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
