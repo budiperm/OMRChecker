@@ -372,21 +372,18 @@ def test_item_analysis():
 
 def test_item_analysis_points_at_doubtful_questions():
     e = ujian.Exam(keys={ujian.ALL_CODES: "ABCDE"})
-    sheets = [  # q2's key says B, but most chose C; q3: weaker sheets get it right more
-        ["A", "C", "D", "D", "E"],
-        ["A", "C", "D", "D", "E"],
-        ["A", "C", "D", "D", "E"],
-        ["A", "B", "D", "D", ""],
-        ["A", "C", "C", "", ""],
-        ["", "C", "C", "", ""],
-    ]
+    sheets = (  # q2's key says B, but everyone chose C; q3: weaker sheets get it right more
+        [["A", "C", "D", "D", "E"]] * 4 + [["A", "C", "D", "D", ""]] * 3 + [["", "C", "C", "", ""]] * 3
+    )
     results = ujian.score_results([row(f"{i}.jpg", a, NIS=str(i)) for i, a in enumerate(sheets)], [], e, Q5)
     items = {a["soal"]: a for a in ujian.item_analysis(results, e, Q5)}
     assert items["2"]["terbanyak"] == "C" and items["2"]["catatan"].startswith("Cek kunci")
-    assert items["3"]["daya_beda"] < 0 and "Daya beda negatif" in items["3"]["catatan"]
+    assert items["3"]["daya_beda"] == -1 and "Daya beda negatif" in items["3"]["catatan"]
     assert items["4"]["daya_beda"] == 1 and items["4"]["catatan"] == ""
-    assert items["1"]["catatan"] == ""
-    # too few sheets: no discrimination, no notes
+    assert items["1"]["catatan"] == "" and items["5"]["catatan"] == ""
+    # fewer sheets: discrimination from 5, notes only from 10
+    some = ujian.item_analysis(results[:4] + results[-2:], e, Q5)
+    assert some[3]["daya_beda"] == 1 and not any(a["catatan"] for a in some)
     few = ujian.item_analysis(results[:3], e, Q5)
     assert all(a["daya_beda"] is None and not a["catatan"] for a in few)
 

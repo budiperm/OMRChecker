@@ -417,8 +417,9 @@ def main(shots, out_pdf):
                         "sebaran jawaban A–E. Kategori: <b>Mudah</b> (lebih dari 70% benar), <b>Sedang</b> (30–70%), "
                         "<b>Sukar</b> (kurang dari 30%). <b>Daya beda</b> (minimal 5 LJK): selisih persentase benar "
                         "kelompok nilai tertinggi dan terendah (27% masing-masing), dari -1 sampai 1; di atas 0,3 baik. "
-                        "Baris <b>kuning</b> perlu dicek: lebih banyak peserta memilih jawaban lain daripada kunci "
-                        "(kunci mungkin salah ketik), atau daya bedanya negatif. Pilih barisnya untuk melihat alasannya. "
+                        "Mulai 10 LJK, baris <b>kuning</b> menandai soal yang perlu dicek: kebanyakan peserta, juga yang "
+                        "nilainya tertinggi, memilih jawaban lain daripada kunci (kunci mungkin salah ketik), atau daya "
+                        "bedanya negatif. Pilih barisnya untuk melihat alasannya. "
                         "Dengan kunci per kode naskah, analisis dibuat per kode. Bila daftar peserta dipakai dan ada "
                         "yang tidak punya LJK, tombol <b>Lihat daftarnya...</b> menampilkan mereka.",
                         "<b>Ekspor ke Excel...</b> menyimpan rekap lengkap, termasuk kolom <b>Peringkat</b>. "

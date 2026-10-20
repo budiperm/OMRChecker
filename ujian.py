@@ -1201,7 +1201,8 @@ def load_students(path, columns=None):
 # ---------------------------------------------------------------------------
 
 
-MIN_ITEM_NOTES = 5  # fewer sheets than this: too few to point at a question
+MIN_DISCRIMINATION = 5  # sheets needed for a discrimination figure
+MIN_ITEM_NOTES = 10  # sheets needed before a question is pointed at
 
 
 def _item_groups(results, exam):
@@ -1216,13 +1217,17 @@ def _item_groups(results, exam):
     return [(c, rs) for c, rs in groups if rs]
 
 
+def _top_size(group):
+    return max(1, round(len(group) * 0.27))
+
+
 def discrimination(group, correct):
     """Daya beda: share correct in the top 27% (by grade) minus the bottom
     27%, from -1 to 1. None with too few sheets to say."""
-    if len(group) < MIN_ITEM_NOTES:
+    if len(group) < MIN_DISCRIMINATION:
         return None
     ranked = sorted(group, key=lambda r: -r.grade)
-    n = max(1, round(len(ranked) * 0.27))
+    n = _top_size(ranked)
     top = sum(correct(r) for r in ranked[:n]) / n
     bottom = sum(correct(r) for r in ranked[-n:]) / n
     return round(top - bottom, 2)
@@ -1240,7 +1245,8 @@ def item_analysis(results, exam, questions):
             for i, q in enumerate(labels):
                 counts = {o: 0 for o in OPTIONS_ORDER}
                 counts.update({"Kosong": 0, "Ganda": 0})
-                answered = {}  # result -> answer counted (not counted = blank)
+                answered = {}  # result -> answer counted (not counted = blank) is right
+                given = {}  # result -> that answer
                 for r in group:
                     key = (keys_for(exam, r.code) or {}).get(sec, "")
                     if i >= len(key):
@@ -1253,6 +1259,7 @@ def item_analysis(results, exam, questions):
                     else:
                         counts[a] = counts.get(a, 0) + 1
                     answered[id(r)] = a == key[i]
+                    given[id(r)] = a
                 if not answered:
                     continue
                 pct = round(sum(answered.values()) / len(answered) * 100, 1)
@@ -1266,11 +1273,17 @@ def item_analysis(results, exam, questions):
                 chosen = {o: n for o, n in counts.items() if o not in ("Kosong", "Ganda") and n}
                 top = max(chosen.values(), default=0)
                 most = "/".join(o for o, n in chosen.items() if n == top)
-                power = discrimination([r for r in group if id(r) in answered], lambda r: answered[id(r)])
+                sheets = [r for r in group if id(r) in answered]
+                power = discrimination(sheets, lambda r: answered[id(r)])
                 notes = []
-                if len(answered) >= MIN_ITEM_NOTES and len(per_code) == 1 and top > chosen.get(key_text, 0):
-                    notes.append(f"Cek kunci: lebih banyak yang memilih {most} daripada kunci {key_text}")
-                if power is not None and power < 0:
+                if len(sheets) >= MIN_ITEM_NOTES and len(per_code) == 1 and len(most) == 1 and most != key_text:
+                    # a mistyped key: the best sheets mostly agree on another answer
+                    best = sorted(sheets, key=lambda r: -r.grade)[: _top_size(sheets)]
+                    picks = [given[id(r)] for r in best]
+                    if picks.count(most) * 2 >= len(picks) and picks.count(most) > picks.count(key_text):
+                        notes.append(f"Cek kunci: kebanyakan peserta, juga yang nilainya tertinggi, memilih {most}, "
+                                     f"bukan {key_text}")  # fmt: skip
+                if len(sheets) >= MIN_ITEM_NOTES and power is not None and power <= -0.2:
                     notes.append("Daya beda negatif: peserta bernilai rendah lebih banyak yang benar")
                 weights, _ = parse_weights(exam.weights.get(sec, ""))
                 rows.append({"kode": code, "bagian": sec, "soal": question_label(sec, q), "kunci": key_text,
@@ -1499,8 +1512,9 @@ def export_excel(path, results, exam, questions, students=None, title=""):
     end = len(analysis) + 3
     ws.cell(end, 1, "Daya Beda: selisih persentase benar kelompok nilai tertinggi (27%) dan terendah (27%), "
                     "dari -1 sampai 1. Di atas 0,3 baik; di bawah 0,2 soal kurang membedakan; "
-                    f"negatif perlu dicek. Dihitung bila ada minimal {MIN_ITEM_NOTES} LJK.")
-    ws.cell(end + 1, 1, "Kuning: soal yang perlu dicek (kunci mungkin salah ketik, atau daya beda negatif).")
+                    f"negatif perlu dicek. Dihitung bila ada minimal {MIN_DISCRIMINATION} LJK.")
+    ws.cell(end + 1, 1, f"Kuning: soal yang perlu dicek (kunci mungkin salah ketik, atau daya beda negatif); "
+                        f"ditandai bila ada minimal {MIN_ITEM_NOTES} LJK.")
 
     if students:
         ws = wb.create_sheet("Tidak Ikut Ujian")

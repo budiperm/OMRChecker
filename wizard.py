@@ -1330,10 +1330,8 @@ class ExportStep(Step):
         ttk.Button(self.absent_row, text="Lihat daftarnya...", command=self.show_absent).pack(side="left", padx=8)
         f = ttk.LabelFrame(self, text="Analisis butir soal")
         f.pack(fill="both", expand=True)
-        self.item_legend = tk.StringVar()
-        ttk.Label(f, textvariable=self.item_legend, foreground=theme.MUTED).pack(side="bottom", anchor="w", padx=6)
-        self.item_note = tk.StringVar()
-        ttk.Label(f, textvariable=self.item_note, foreground=theme.WARN).pack(side="bottom", anchor="w", padx=6)
+        self.item_note = tk.StringVar()  # shown only when some question needs a look
+        self.item_label = ttk.Label(f, textvariable=self.item_note, foreground=theme.WARN)
         cols = ("kode", "soal", "kunci", "bobot", "benar", "kategori", "daya_beda", "terbanyak",
                 "A", "B", "C", "D", "E", "Kosong", "Ganda")  # fmt: skip
         names = {"kode": "Kode", "benar": "% Benar", "daya_beda": "Daya beda"}
@@ -1446,11 +1444,13 @@ class ExportStep(Step):
                              values=(a["kode"], a["soal"], a["kunci"], f"{a['bobot']:g}", a["benar"], a["kategori"],
                                      power, a["terbanyak"], *[a[o] for o in ujian.OPTIONS_ORDER],
                                      a["Kosong"], a["Ganda"]))  # fmt: skip
-        self.item_note.set("")
         flagged = sum(1 for a in self.analysis if a["catatan"])
-        self.item_legend.set(f"Kuning: {flagged} soal perlu dicek (kunci mungkin salah ketik, atau peserta bernilai "
-                             "rendah justru lebih banyak benar). Pilih barisnya untuk melihat alasan."
-                             if flagged else "")  # fmt: skip
+        self.item_legend = f"Kuning: {flagged} soal perlu dicek. Pilih barisnya untuk melihat alasannya."
+        self.item_note.set(self.item_legend)
+        if flagged:
+            self.item_label.pack(side="bottom", anchor="w", padx=6, pady=(2, 4), before=self.tree)
+        else:
+            self.item_label.pack_forget()
         self.show_export_status()
 
     def show_absent(self):
@@ -1485,7 +1485,7 @@ class ExportStep(Step):
     def show_item_note(self):
         sel = self.tree.selection()
         a = self.analysis[int(sel[0])] if sel else None
-        self.item_note.set(f"Soal {a['soal']}: {a['catatan']}" if a and a["catatan"] else "")
+        self.item_note.set(f"Soal {a['soal']}: {a['catatan']}" if a and a["catatan"] else self.item_legend)
 
     def export(self, ask_open=True):
         """Save the Excel rekap; True when written."""
