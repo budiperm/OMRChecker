@@ -212,3 +212,26 @@ def test_switch_look_is_remembered(setup, quiet):
             w.destroy()
         except tk.TclError:
             pass
+
+
+def test_after_export_keeps_keys_but_not_name(setup, quiet):
+    """A finished (exported) exam: the next start keeps the template and keys
+    for a repeat exam, but not its name or folders."""
+    lib, scans, tmp = setup
+    settings = tmp / "sesi.json"
+    w = open_dashboard(lib, settings)
+    try:
+        first_exam(w, scans)
+        w.exam_name.set("Ujian Lama")
+        w.exam.exported_file = str(tmp / "rekap.xlsx")
+        keys = dict(w.exam.keys)
+        w.close()
+        w = open_dashboard(lib, settings)
+        assert w.exam.name == "" and w.exam_name.get() == ""
+        assert w.exam.keys == keys and w.exam.scans_dir == ""
+        assert statuses(w)[:3] == ["ok", "ok", "todo"]
+    finally:
+        try:
+            w.destroy()
+        except tk.TclError:
+            pass

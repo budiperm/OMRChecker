@@ -1895,6 +1895,9 @@ class Wizard(tk.Tk):
         self.prefs = ujian.load_prefs(settings)
         if self.exam.exported_file:  # finished last time: the next exam starts with fresh folders
             ujian.forget_folders(self.exam, self.prefs)
+            # and without that exam's name; template and keys stay for a repeat exam
+            # ("Ujian baru" clears the keys too)
+            self.exam.name = ""
         self.template = None
         self.students = []
         self.reprocess = False
