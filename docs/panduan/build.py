@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -37,7 +37,7 @@ BADGE = (232, 89, 12)
 CALLOUTS = {  # each marker sits on the top-left corner of what it points at
     "01_template": [(296, 155), (280, 684), (1147, 753)],
     "02_editor": [(10, 8), (700, 84), (692, 466), (1146, 564), (700, 703), (700, 743)],
-    "03_kunci": [(280, 108), (496, 198), (656, 248), (280, 676)],
+    "03_kunci": [(280, 108), (280, 145), (496, 235), (656, 288), (280, 666)],
     "04_folder": [(808, 137), (889, 137), (1060, 137), (296, 181), (285, 232), (293, 617)],
     "05_scan_dialog": [(22, 30), (22, 90), (22, 182), (22, 218), (460, 390)],
     "06_hasil": [(293, 137), (293, 219), (296, 262)],
@@ -280,7 +280,13 @@ def main(shots, out_pdf):
               shot("03_kunci"),
               numbered(["<b>Satu kunci untuk semua LJK</b>, atau <b>kunci berbeda per kode naskah</b> bila ada "
                         "paket soal A/B/C. Untuk pilihan kedua, pilih kolom yang berisi kode naskah lalu isi kunci "
-                        "untuk setiap kode.",
+                        "untuk setiap kode (tombol <b>Tambah</b>). Pindah pilihan tidak menghapus kunci yang sudah "
+                        "diketik: kunci tiap pilihan tetap tersimpan.",
+                        "<b>Simpan kunci...</b> menyimpan kunci (termasuk kunci tiap kode naskah, bobot, pilihan "
+                        "berurutan, dan penilaian) ke satu file <i>.kunci</i>. <b>Buka kunci...</b> memakainya lagi, "
+                        "misalnya untuk ujian berikutnya dengan LJK yang sama tetapi soal dan kuncinya berbeda: pilih "
+                        "templatenya di Langkah 1, lalu buka file kuncinya. Bagian yang tidak cocok dengan template "
+                        "diberi tahu.",
                         "Kotak kunci jawaban per bagian soal. Gambar kecil di kiri menunjukkan letak bagian itu di LJK. "
                         "Penghitung di kanan atas (mis. <i>60 / 60 terisi</i>) memberi tahu bila kunci kurang atau "
                         "kelebihan.",
@@ -288,7 +294,8 @@ def main(shots, out_pdf):
                         "1-10:2, 11-20:1</font> artinya soal 1–10 bernilai 2 dan soal 11–20 bernilai 1. "
                         "Centang <b>Harus diisi berurutan</b> untuk bagian yang wajib diisi tanpa lompat: begitu ada "
                         "soal kosong, jawaban sesudahnya di bagian itu tidak dihitung (dinilai seperti kosong). "
-                        "Misalnya 20 soal dan soal 9 kosong, maka jawaban soal 10–20 tidak dihitung.",
+                        "Misalnya 20 soal dan soal 9 kosong, maka jawaban soal 10–20 tidak dihitung. Dengan kunci per "
+                        "kode naskah, centang ini diatur per kode.",
                         "<b>Penilaian</b>: poin untuk jawaban benar, salah, dan kosong; centang <b>Nilai dalam skala "
                         "0-100</b> untuk nilai akhir 0–100; isi <b>Nilai batas lulus</b> bila ingin tahu jumlah peserta yang lulus."]),
               note("Nilai salah boleh negatif (mis. -0,25) bila ujian memakai sistem pengurangan nilai."),

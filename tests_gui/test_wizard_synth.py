@@ -636,16 +636,16 @@ def test_key_step_in_order_checkbox(setup, monkeypatch):
         step.texts[first].insert("1.0", "ABCDE")
         step.on_key_edit(first)
         boxes[0].invoke()
-        assert step.in_order[first].get() and w.exam.in_order == ["Hilang", first]
+        assert step.in_order[first].get() and w.exam.in_order == {ujian.ALL_CODES: ["Hilang", first]}
         w.next()
         assert w.current == 2, errors
-        assert w.exam.in_order == [first]
+        assert w.exam.in_order == {ujian.ALL_CODES: [first]}
         w.back()
         assert step.in_order[first].get()
         boxes = [b for b in iter_widgets(step.keys_frame)
                  if isinstance(b, wz.ttk.Checkbutton) and "berurutan" in str(b.cget("text"))]  # fmt: skip
         boxes[0].invoke()
-        assert w.exam.in_order == []
+        assert w.exam.in_order == {ujian.ALL_CODES: []}
     finally:
         w.destroy()
 
@@ -689,7 +689,7 @@ def test_each_template_keeps_its_own_keys(setup, monkeypatch):
         assert step.weights[part].get() == "1-2:2" and step.in_order[part].get()
         w.next()
         saved = ujian.Exam.load(tmp / "sesi.json")
-        assert saved.keys[ujian.ALL_CODES] == {part: "ABCDE"} and saved.in_order == [part]
+        assert saved.keys[ujian.ALL_CODES] == {part: "ABCDE"} and saved.in_order == {ujian.ALL_CODES: [part]}
     finally:
         w.destroy()
 
@@ -746,3 +746,116 @@ def test_next_exam_after_restart_is_not_exported_yet(setup, monkeypatch):
             w.destroy()
         except tk.TclError:
             pass
+
+
+def test_key_step_mode_switch_keeps_keys_and_in_order_per_code(setup, monkeypatch):
+    """Switching to 'Kunci berbeda per kode naskah' used to wipe the one key
+    typed before; 'Harus diisi berurutan' did not follow the exam code."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)
+    codes = iter(["1", "2"])
+    monkeypatch.setattr(wz.simpledialog, "askstring", lambda *a, **k: next(codes))
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        w.next()
+        step = w.steps[1]
+        part = next(iter(step.texts))
+
+        def typed():
+            return step.texts[part].get("1.0", "end").replace(" ", "").strip()
+
+        def type_key(key):
+            step.texts[part].delete("1.0", "end")
+            step.texts[part].insert("1.0", key)
+            step.on_key_edit(part)
+
+        type_key("ABCDE")
+        step.mode.set("code")
+        step.on_mode()
+        step.add_code()
+        type_key("BBBBB")
+        step.in_order[part].set(True)
+        step.on_in_order(part)
+        step.add_code()
+        assert step.current_code == "2" and typed() == "" and not step.in_order[part].get()
+        type_key("CCCCC")
+        step.codes.selection_clear(0, "end")
+        step.codes.selection_set(0)
+        step.show_code()
+        assert typed() == "BBBBB" and step.in_order[part].get()
+        step.mode.set("single")
+        step.on_mode()
+        assert typed() == "ABCDE" and not step.in_order[part].get()
+        step.mode.set("code")
+        step.on_mode()
+        assert list(step.codes.get(0, "end")) == ["1", "2"] and typed() == "BBBBB"
+        w.next()  # leave in per-code mode: the one key is kept aside
+        assert w.current == 2
+        assert w.exam.code_column and ujian.active_codes(w.exam) == ["1", "2"]
+        assert w.exam.keys[ujian.ALL_CODES] == {part: "ABCDE"}
+        assert w.exam.in_order == {"1": [part]}
+        w.back()
+        step.mode.set("single")
+        step.on_mode()
+        assert typed() == "ABCDE"
+        w.next()
+        assert w.exam.code_column == "" and w.exam.keys["1"] == {part: "BBBBB"}
+    finally:
+        w.destroy()
+
+
+def test_key_step_save_and_open_keys_file(setup, monkeypatch):
+    """'Simpan kunci...' writes the keys (per exam code too) to a file that
+    'Buka kunci...' brings back, e.g. for a new exam on the same LJK."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    shown = []
+    monkeypatch.setattr(wz.messagebox, "showerror", lambda *a, **k: pytest.fail(f"error: {a}"))
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: True)
+    monkeypatch.setattr(wz.messagebox, "showinfo", lambda *a, **k: shown.append(a[1]))
+    monkeypatch.setattr(wz.messagebox, "showwarning", lambda *a, **k: shown.append(a[1]))
+    monkeypatch.setattr(wz.simpledialog, "askstring", lambda *a, **k: "7")
+    path = tmp / f"kunci{ujian.KEYS_EXT}"
+    monkeypatch.setattr(wz.filedialog, "asksaveasfilename", lambda **k: str(path))
+    monkeypatch.setattr(wz.filedialog, "askopenfilename", lambda **k: str(path))
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        w.next()
+        step = w.steps[1]
+        buttons = {str(b.cget("text")): b for b in iter_widgets(step) if isinstance(b, wz.ttk.Button)}
+        buttons["Simpan kunci..."].invoke()
+        assert not path.exists() and shown == ["Belum ada kunci jawaban yang bisa disimpan."]
+        parts = list(step.texts)
+        step.mode.set("code")
+        step.on_mode()
+        step.add_code()
+        for p in parts:
+            step.texts[p].insert("1.0", "D")
+            step.on_key_edit(p)
+        step.in_order[parts[0]].set(True)
+        step.on_in_order(parts[0])
+        step.weights[parts[0]].set("1:3")
+        step.correct.set("2")
+        buttons["Simpan kunci..."].invoke()
+        assert path.exists()
+
+        # new exam: everything gone, then the file brings it back
+        w.exam.keys, w.exam.in_order, w.exam.weights, w.exam.code_column = {}, {}, {}, ""
+        step.enter()
+        assert step.mode.get() == "single" and step.texts[parts[0]].get("1.0", "end").strip() == ""
+        shown.clear()
+        buttons["Buka kunci..."].invoke()
+        assert shown == []
+        assert step.mode.get() == "code" and list(step.codes.get(0, "end")) == ["7"]
+        assert step.texts[parts[0]].get("1.0", "end").strip() == "D" and step.in_order[parts[0]].get()
+        assert step.weights[parts[0]].get() == "1:3" and step.correct.get() == "2"
+        w.next()
+        assert w.current == 2 and w.exam.keys == {"7": {p: "D" for p in parts}} and w.exam.correct == 2
+    finally:
+        w.destroy()

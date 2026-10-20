@@ -180,11 +180,11 @@ def test_switch_template_keeps_keys_per_template():
     ujian.switch_template(e, "/lib/A")  # same template: nothing changes
     assert e.keys == {"1": {"I": "AB"}} and e.corrections
     ujian.switch_template(e, "/lib/B")
-    assert (e.template, e.code_column, e.keys, e.weights, e.in_order, e.corrections) == ("/lib/B", "", {}, {}, [], {})
+    assert (e.template, e.code_column, e.keys, e.weights, e.in_order, e.corrections) == ("/lib/B", "", {}, {}, {}, {})
     e.keys = {ujian.ALL_CODES: {"X": "C"}}
     ujian.switch_template(e, "/elsewhere/A")  # matched by folder name (moved library)
     assert e.code_column == "Kode" and e.keys == {"1": {"I": "AB"}} and e.weights == {"I": "1:2"}
-    assert e.in_order == ["I"] and e.template_keys == {"B": {"code_column": "", "in_order": [], "weights": {},
+    assert e.in_order == ["I"] and e.template_keys == {"B": {"code_column": "", "in_order": {}, "weights": {},
                                                              "keys": {ujian.ALL_CODES: {"X": "C"}},
                                                              "corrections": {}}}
     assert e.corrections == {"a.jpg": {"q1": "A"}}  # back on A: its corrections are back too
@@ -559,3 +559,89 @@ def test_rename_section_moves_labels_keys_and_corrections(tmp_path, real_templat
     ujian.rename_section_in_exam(e, "Motivasi", "Minat", mapping)
     assert e.keys[ujian.ALL_CODES] == {"Minat": "AAAA"} and e.weights == {"Minat": "1-2:2"}
     assert e.corrections == {"a.jpg": {"Minat_3": "B", "Nama": "X"}}
+
+
+def test_in_order_per_exam_code():
+    # code 101 must be answered in order, code 102 not
+    e = exam(unmarked=0)
+    ujian.set_in_order(e, "101", "", True)
+    assert e.in_order == {"101": [""]}
+    a = ujian.score_results([row("a.jpg", ["A", "", "C", "D", "E"], NIS="1", KodeSoal="101")], [], e, Q5)[0]
+    b = ujian.score_results([row("b.jpg", ["E", "", "C", "B", "A"], NIS="2", KodeSoal="102")], [], e, Q5)[0]
+    assert (a.correct, a.ignored) == (1, 3) and (b.correct, b.ignored) == (4, 0)
+    assert ujian.uses_in_order(e)
+    ujian.set_in_order(e, "101", "", False)
+    assert not ujian.uses_in_order(e)
+    # a v1.3.x list holds for every code, and becomes per code once changed
+    e.in_order = [""]
+    assert ujian.in_order_for(e, "102") == [""]
+    ujian.set_in_order(e, "102", "", False)
+    assert ujian.in_order_for(e, "101") == [""] and ujian.in_order_for(e, "102") == []
+    ujian.rename_section_in_exam(e, "", "I", {})
+    assert ujian.in_order_for(e, "101") == ["I"]
+
+
+def test_keys_of_the_other_mode_are_kept_but_not_scored():
+    e = exam(keys={ujian.ALL_CODES: "AAAAA", "101": "ABCDE"})
+    assert ujian.active_codes(e) == ["101"]
+    res = ujian.score_results([row("a.jpg", list("ABCDE"), NIS="1", KodeSoal="999")], [], e, Q5)[0]
+    assert res.grade is None and "Kode naskah '999' tidak punya kunci jawaban" in res.flags
+    e.code_column = ""
+    assert ujian.active_codes(e) == [ujian.ALL_CODES]
+    res = ujian.score_results([row("a.jpg", list("ABCDE"), NIS="1", KodeSoal="101")], [], e, Q5)[0]
+    assert res.correct == 1
+    analysis = ujian.item_analysis([res], e, Q5)
+    assert analysis[0]["kunci"] == "A" and analysis[1]["kunci"] == "A"
+
+
+def test_keys_file_round_trip(tmp_path):
+    sections = {"I": ["q1", "q2", "q3"], "II": ["q4", "q5"]}
+    e = ujian.Exam(code_column="Kode", keys={ujian.ALL_CODES: {"I": "EEE"}, "A": {"I": "ABC", "II": "DE"},
+                                             "B": {"I": "CBA", "II": "ED"}},
+                   weights={"II": "1:2"}, correct=4, incorrect=-1, scale_100=False, kkm=60)  # fmt: skip
+    ujian.set_in_order(e, "B", "II", True)
+    path = ujian.export_keys_file(e, sections, tmp_path / f"kunci{ujian.KEYS_EXT}", "LJK 50")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["keys"] == {"A": {"I": "ABC", "II": "DE"}, "B": {"I": "CBA", "II": "ED"}}  # scored keys only
+    assert data["in_order"] == {"A": [], "B": ["II"]} and data["template"] == "LJK 50"
+
+    new = ujian.Exam(keys={ujian.ALL_CODES: {"I": "AAA"}})
+    warnings = ujian.import_keys_file(path, new, sections, ["NoPeserta", "Kode"])
+    assert warnings == []
+    assert new.code_column == "Kode" and ujian.active_codes(new) == ["A", "B"]
+    assert new.keys == {ujian.ALL_CODES: {"I": "AAA"}, "A": {"I": "ABC", "II": "DE"}, "B": {"I": "CBA", "II": "ED"}}
+    assert ujian.in_order_for(new, "B") == ["II"] and ujian.in_order_for(new, "A") == []
+    assert (new.weights, new.correct, new.incorrect, new.scale_100, new.kkm) == ({"II": "1:2"}, 4, -1, False, 60)
+
+    # one key for all: replaces only the one key, per-code keys stay put aside
+    single = ujian.Exam(keys={ujian.ALL_CODES: {"I": "BBB"}}, in_order={ujian.ALL_CODES: ["I"]})
+    p2 = ujian.export_keys_file(single, sections, tmp_path / "satu.kunci")
+    warnings = ujian.import_keys_file(p2, new, sections, ["Kode"])
+    assert new.code_column == "" and new.keys[ujian.ALL_CODES] == {"I": "BBB"} and "A" in new.keys
+    assert ujian.in_order_for(new, ujian.ALL_CODES) == ["I"] and ujian.in_order_for(new, "B") == ["II"]
+    assert warnings == ["Bagian II tidak ada di file ini, kuncinya masih kosong."]
+
+
+def test_keys_file_that_does_not_fit_the_template(tmp_path):
+    path = tmp_path / "lain.kunci"
+    path.write_text(json.dumps({"format": ujian.KEYS_FORMAT, "code_column": "KodeSoal",
+                                "keys": {"1": {"I": "ABCDE", "X": "AB"}}, "in_order": {"1": ["I", "X"]},
+                                "weights": {"X": "1:2"}}), encoding="utf-8")  # fmt: skip
+    e = ujian.Exam()
+    warnings = ujian.import_keys_file(path, e, {"I": ["q1", "q2", "q3"], "II": ["q4"]}, ["Kode Naskah"])
+    assert warnings == [
+        "Kolom kode naskah 'KodeSoal' tidak ada di template ini, dipakai kolom 'Kode Naskah'. Periksa pilihan kolomnya.",
+        "Bagian X tidak ada di template ini, kuncinya tidak dipakai.",
+        "Bagian II tidak ada di file ini, kuncinya masih kosong.",
+        "Bagian I: kunci berisi 5 jawaban, padahal hanya 3 soal.",
+    ]
+    assert e.keys == {"1": {"I": "ABCDE"}} and e.in_order == {"1": ["I"]} and e.weights == {}
+    # a template with one unnamed part takes the keys of a file with one named part
+    e = ujian.Exam()
+    path.write_text(json.dumps({"format": ujian.KEYS_FORMAT, "code_column": "", "keys": {"*": {"Jawaban": "AB"}}}),
+                    encoding="utf-8")  # fmt: skip
+    assert ujian.import_keys_file(path, e, Q5) == [] and e.keys == {ujian.ALL_CODES: {"": "AB"}}
+    for bad in ("bukan json", json.dumps({"keys": {}}), json.dumps({"format": ujian.KEYS_FORMAT, "keys": {"*": {"Y": "A", "Z": "B"}}})):
+        path.write_text(bad, encoding="utf-8")
+        with pytest.raises(ValueError):
+            ujian.import_keys_file(path, ujian.Exam(), Q5)
