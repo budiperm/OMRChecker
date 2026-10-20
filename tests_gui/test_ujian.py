@@ -185,7 +185,72 @@ def test_switch_template_keeps_keys_per_template():
     ujian.switch_template(e, "/elsewhere/A")  # matched by folder name (moved library)
     assert e.code_column == "Kode" and e.keys == {"1": {"I": "AB"}} and e.weights == {"I": "1:2"}
     assert e.in_order == ["I"] and e.template_keys == {"B": {"code_column": "", "in_order": [], "weights": {},
-                                                             "keys": {ujian.ALL_CODES: {"X": "C"}}}}
+                                                             "keys": {ujian.ALL_CODES: {"X": "C"}},
+                                                             "corrections": {}}}
+    assert e.corrections == {"a.jpg": {"q1": "A"}}  # back on A: its corrections are back too
+
+
+def test_clear_corrections_also_forgets_those_put_aside():
+    e = ujian.Exam(template="/lib/A", corrections={"a.jpg": {"q1": "A"}})
+    ujian.switch_template(e, "/lib/B")
+    e.corrections = {"a.jpg": {"q1": "C"}}
+    ujian.clear_corrections(e)  # e.g. another scan folder
+    assert e.corrections == {}
+    ujian.switch_template(e, "/lib/A")
+    assert e.corrections == {}
+
+
+def test_rekap_state_ignores_keys_of_other_templates(tmp_path):
+    (tmp_path / "Results").mkdir()
+    (tmp_path / "Results" / "Results_1.csv").write_text("file_id\na.jpg\n", encoding="utf-8")
+    e = ujian.Exam(template="/lib/A", output_dir=str(tmp_path), keys={ujian.ALL_CODES: {"": "AB"}})
+    state = ujian.rekap_state(e)
+    ujian.switch_template(e, "/lib/B")
+    ujian.switch_template(e, "/lib/A")  # only looked at another template
+    assert e.template_keys and ujian.rekap_state(e) == state
+    e.keys[ujian.ALL_CODES][""] = "AC"
+    assert ujian.rekap_state(e) != state
+
+
+def test_forget_folders_forgets_the_old_export(tmp_path):
+    e = ujian.Exam(output_dir=str(tmp_path), exported_file=str(tmp_path / "Rekap A.xlsx"), exported_state="x")
+    ujian.forget_folders(e, {ujian.PREF_SCANS: False, ujian.PREF_OUTPUT: True})  # same results: still exported
+    assert e.exported_file and e.exported_state
+    ujian.forget_folders(e, {ujian.PREF_SCANS: False, ujian.PREF_OUTPUT: False})
+    assert (e.output_dir, e.exported_file, e.exported_state) == ("", "", "")
+
+
+def write_results(folder, *fids):
+    (folder / "Results").mkdir(parents=True)
+    with (folder / "Results" / "Results_1.csv").open("w", newline="", encoding="utf-8") as f:
+        f.write("file_id,input_path,output_path,score,q1,q2,q3,q4,q5,NIS\n")
+        for i, fid in enumerate(fids):
+            f.write(f"{fid},/scan/{fid},/out/{fid},0,A,B,C,D,E,{folder.name}{i}\n")
+
+
+def test_sheets_with_the_same_name_in_subfolders(tmp_path):
+    """Scanners restart their numbering per folder: 7A/scan_0001.jpg and
+    7B/scan_0001.jpg are two sheets, a correction is for one of them."""
+    out = tmp_path / "hasil"
+    write_results(out / "7A", "scan_0001.jpg", "scan_0002.jpg")
+    write_results(out / "7B", "scan_0001.jpg")
+    write_results(out, "lepas.jpg")
+    rows, _ = ujian.read_results(out)
+    assert sorted(r["file_id"] for r in rows) == ["7A/scan_0001.jpg", "7A/scan_0002.jpg", "7B/scan_0001.jpg", "lepas.jpg"]
+    e = ujian.Exam(keys={ujian.ALL_CODES: "ABCDE"}, corrections={"7B/scan_0001.jpg": {"q1": "E"}})
+    res = {r.file_id: r for r in ujian.score_results(rows, [], e, Q5)}
+    assert res["7B/scan_0001.jpg"].corrected and res["7B/scan_0001.jpg"].correct == 4
+    assert not res["7A/scan_0001.jpg"].corrected and res["7A/scan_0001.jpg"].correct == 5
+    assert ujian.done_sheets(out) == [[".", "lepas.jpg"], ["7A", "scan_0001.jpg"], ["7A", "scan_0002.jpg"],
+                                      ["7B", "scan_0001.jpg"]]  # fmt: skip
+
+    # saved by v1.3.0: keyed by the bare name; moved when that name is one sheet only
+    e = ujian.Exam(keys={ujian.ALL_CODES: "ABCDE"}, corrections={"scan_0002.jpg": {"q1": "E"},
+                                                                  "scan_0001.jpg": {"q1": "E"}})  # fmt: skip
+    res = {r.file_id: r for r in ujian.score_results(rows, [], e, Q5)}
+    assert res["7A/scan_0002.jpg"].corrected and e.corrections["7A/scan_0002.jpg"] == {"q1": "E"}
+    assert not res["7A/scan_0001.jpg"].corrected and not res["7B/scan_0001.jpg"].corrected
+    assert "scan_0001.jpg" in e.corrections  # ambiguous: left as it was
 
 
 def test_export_csv(tmp_path):

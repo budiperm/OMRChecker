@@ -422,8 +422,8 @@ class Exam:
     # parts that must be answered in order: after the first blank question,
     # the answers that follow are not counted (scored as blank)
     in_order: list = field(default_factory=list)
-    # template folder name -> its KEY_FIELDS, kept while another template is
-    # chosen so switching back brings that template's keys back (switch_template)
+    # template folder name -> its KEY_FIELDS and corrections, kept while another
+    # template is chosen so switching back brings them back (switch_template)
     template_keys: dict = field(default_factory=dict)
     rekap_order: str = "nama"  # RANK_ORDERS key: row order of the Excel rekap
     exported_file: str = ""  # last Excel rekap written
@@ -459,23 +459,34 @@ class Exam:
 
 
 KEY_FIELDS = ("code_column", "keys", "weights", "in_order")  # what belongs to one template
+# also put aside per template: corrections name that template's question labels
+SWITCHED_FIELDS = KEY_FIELDS + ("corrections",)
 
 
 def switch_template(exam, folder):
-    """Choose another template: put the keys of the current one aside and take
-    the ones saved for `folder` (empty when it never had any). Corrections
-    are cleared: they were made on sheets read with the other template."""
+    """Choose another template: put the keys and corrections of the current
+    one aside and take the ones saved for `folder` (empty when it never had
+    any), so looking at another template and coming back loses nothing."""
     folder = str(folder)
     if folder == exam.template:
         return
     if exam.template:  # no template yet: what was typed belongs to the first one chosen
-        exam.template_keys[Path(exam.template).name] = {f: deepcopy(getattr(exam, f)) for f in KEY_FIELDS}
+        exam.template_keys[Path(exam.template).name] = {f: deepcopy(getattr(exam, f)) for f in SWITCHED_FIELDS}
         saved = exam.template_keys.pop(Path(folder).name, {})
         blank = Exam()
-        for f in KEY_FIELDS:
+        for f in SWITCHED_FIELDS:
             setattr(exam, f, deepcopy(saved.get(f, getattr(blank, f))))
+    else:
+        exam.corrections = {}
     exam.template = folder
+
+
+def clear_corrections(exam):
+    """Forget every manual correction, also those put aside with another
+    template: the sheets they were made on are gone (new scans or results)."""
     exam.corrections = {}
+    for saved in exam.template_keys.values():
+        saved.pop("corrections", None)
 
 
 PREFS_FILE = "preferensi.json"  # app preferences, next to the session file
@@ -512,7 +523,10 @@ def forget_folders(exam, prefs):
         exam.scans_dir = ""
     if not prefs.get(PREF_OUTPUT):
         exam.output_dir = ""
-    exam.corrections = {}
+        # the rekap exported last time belongs to that output folder: the next
+        # exam is "not exported yet" and must not offer to overwrite that file
+        exam.exported_file = exam.exported_state = ""
+    clear_corrections(exam)
 
 
 def open_exam(folder, lib=None):
@@ -555,7 +569,8 @@ def rekap_state(exam):
                    for pattern in ("Results/Results_*.csv", "Manual/ErrorFiles.csv") for p in out.rglob(pattern))  # fmt: skip
     if not files:
         return ""
-    data = {k: v for k, v in asdict(exam).items() if k not in ("exported_file", "exported_state")}
+    skip = ("exported_file", "exported_state", "template_keys")  # keys of other templates: not in this rekap
+    data = {k: v for k, v in asdict(exam).items() if k not in skip}
     data["files"] = files
     return hashlib.sha1(json.dumps(data, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
@@ -609,20 +624,28 @@ def current(out, pattern):
 
 def read_results(output_dir):
     """Rows from every Results_*.csv under output_dir (newest wins per file),
-    plus rows of sheets that could not be read (Manual/ErrorFiles.csv)."""
+    plus rows of sheets that could not be read (Manual/ErrorFiles.csv).
+    A sheet from a subfolder of the scans gets that folder in its file_id
+    ("7B/scan_0001.jpg"): scanners restart their numbering in every folder,
+    and corrections are keyed by file_id."""
     out = Path(output_dir)
     rows, errors = {}, {}
     if not out.is_dir():
         return [], []
+
+    def sheet(r, f):
+        sub = f.parent.parent.relative_to(out).as_posix()
+        return r if sub == "." else {**r, "file_id": f"{sub}/{r['file_id']}"}
+
     files = sorted(current(out, "Results/Results_*.csv"), key=lambda p: p.stat().st_mtime)
     for f in files:
         with open(f, newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh):
-                rows[(f.parent.parent, r["file_id"])] = r
+                rows[(f.parent.parent, r["file_id"])] = sheet(r, f)
     for f in current(out, "Manual/ErrorFiles.csv"):
         with open(f, newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh):
-                errors[(f.parent.parent, r["file_id"])] = r
+                errors[(f.parent.parent, r["file_id"])] = sheet(r, f)
     for k in rows:
         errors.pop(k, None)
     return list(rows.values()), list(errors.values())
@@ -741,6 +764,7 @@ def score_results(rows, errors, exam, questions, students=None, blank_source="")
         skip_keys = {"file_id", "input_path", "output_path", "score"}
         rows = [r for r in rows if Path(r["file_id"]).stem != stem
                 or any(v.strip() for k, v in r.items() if k not in skip_keys)]  # fmt: skip
+    _upgrade_corrections(exam, rows)
     students = students or []
     by_nis, by_name = {}, {}
     for s in students:
@@ -796,6 +820,21 @@ def score_results(rows, errors, exam, questions, students=None, blank_source="")
             res.flags.append("No. peserta dobel: " + ", ".join(o.file_id for o in dup if o is not res))
     results.sort(key=lambda x: (not x.flags, natural_key(x.kelas), natural_key(x.name), x.file_id))
     return results
+
+
+def _upgrade_corrections(exam, rows):
+    """Corrections saved by v1.3.0 and older are keyed by the bare file name,
+    also for sheets in a subfolder: move them to the sheet's full file_id when
+    that name belongs to one sheet only."""
+    names = {}
+    for r in rows:
+        bare = r["file_id"].rsplit("/", 1)[-1]
+        names[bare] = names.get(bare, 0) + 1
+    for r in rows:
+        fid = r["file_id"]
+        bare = fid.rsplit("/", 1)[-1]
+        if fid != bare and fid not in exam.corrections and bare in exam.corrections and names[bare] == 1:
+            exam.corrections[fid] = exam.corrections.pop(bare)
 
 
 def _score_one(res, exam, sections):

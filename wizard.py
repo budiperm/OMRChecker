@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -719,7 +719,7 @@ class ScansStep(Step):
                                  parent=self)  # fmt: skip
         self.scan()
         if moved:
-            self.exam.corrections = {}  # keyed by file name: a new scan_0001.jpg is another sheet
+            ujian.clear_corrections(self.exam)  # keyed by file name: a new scan_0001.jpg is another sheet
             self.wizard.scans_archived = True
 
     def pick_students(self):
@@ -756,7 +756,7 @@ class ScansStep(Step):
             messagebox.showerror(APP_TITLE, "Tidak ada file JPG/PNG/PDF di folder ini.", parent=self)
             return False
         if Path(folder).resolve() != Path(self.exam.scans_dir or ".").resolve():
-            self.exam.corrections = {}
+            ujian.clear_corrections(self.exam)
             if not self.wizard.prefs[ujian.PREF_OUTPUT]:
                 self.exam.output_dir = ""
         self.exam.scans_dir = str(Path(folder))
@@ -856,7 +856,7 @@ class OutputStep(Step):
                                          + "\n".join(str(p.relative_to(out_p)) for p in stray[:5]), parent=self)  # fmt: skip
                     return False
         if str(out_p) != self.exam.output_dir:
-            self.exam.corrections = {}
+            ujian.clear_corrections(self.exam)
         self.exam.output_dir = str(out_p)
         self.exam.name = self.name.get().strip()
         self.wizard.clear_old = self.has_results() and self.policy.get() == "replace"
