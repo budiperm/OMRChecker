@@ -498,6 +498,35 @@ PREFS_FILE = "preferensi.json"  # app preferences, next to the session file
 PREF_SCANS = "ingat_folder_scan"  # keep the scan folder for the next exam
 PREF_OUTPUT = "ingat_folder_hasil"  # keep the output folder for the next exam
 PREF_DASHBOARD = "tampilan_baru"  # open the one-screen look (dashboard.py) instead of the steps
+PREF_SENSITIVITY = "kepekaan_baca"  # 0 = Normal ... len(SENSITIVITY_LEVELS) - 1 = Paling peka
+
+# How much darker than the other options of a question a bubble must be to
+# count as marked: OMRChecker's MIN_JUMP / CONFIDENT_SURPLUS (defaults 25 / 5).
+# Lower reads lightly shaded bubbles and pen crosses, but also smudges.
+SENSITIVITY_LEVELS = [
+    ("Normal", 25, 5),
+    ("Agak peka", 21, 4),
+    ("Peka", 17, 4),
+    ("Lebih peka", 13, 3),
+    ("Paling peka", 10, 2),
+]
+
+
+def sensitivity_level(value):
+    try:
+        return min(max(int(value), 0), len(SENSITIVITY_LEVELS) - 1)
+    except (TypeError, ValueError):
+        return 0
+
+
+def threshold_params(level):
+    """config.json threshold_params for a sensitivity level; {} for Normal
+    (the template's own config, if any, then applies)."""
+    level = sensitivity_level(level)
+    if not level:
+        return {}
+    _, jump, surplus = SENSITIVITY_LEVELS[level]
+    return {"MIN_JUMP": jump, "CONFIDENT_SURPLUS": surplus}
 
 
 def prefs_path(session=None):
@@ -506,13 +535,14 @@ def prefs_path(session=None):
 
 def load_prefs(session=None):
     """App preferences; all off unless switched on."""
-    prefs = {PREF_SCANS: False, PREF_OUTPUT: False, PREF_DASHBOARD: False}
+    prefs = {PREF_SCANS: False, PREF_OUTPUT: False, PREF_DASHBOARD: False, PREF_SENSITIVITY: 0}
     try:
         data = json.loads(prefs_path(session).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return prefs
     if isinstance(data, dict):
-        prefs.update({k: bool(data[k]) for k in prefs if k in data})
+        prefs.update({k: bool(data[k]) for k in prefs if k in data and k != PREF_SENSITIVITY})
+        prefs[PREF_SENSITIVITY] = sensitivity_level(data.get(PREF_SENSITIVITY, 0))
     return prefs
 
 

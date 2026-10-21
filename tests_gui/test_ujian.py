@@ -735,3 +735,14 @@ def test_keys_file_that_does_not_fit_the_template(tmp_path):
         path.write_text(bad, encoding="utf-8")
         with pytest.raises(ValueError):
             ujian.import_keys_file(path, ujian.Exam(), Q5)
+
+
+def test_sensitivity_levels(tmp_path):
+    assert ujian.threshold_params(0) == {}  # Normal: the template's own config.json applies
+    jumps = [ujian.threshold_params(i)["MIN_JUMP"] for i in range(1, len(ujian.SENSITIVITY_LEVELS))]
+    assert jumps == sorted(jumps, reverse=True) and jumps[-1] >= 10  # config schema minimum
+    assert ujian.SENSITIVITY_LEVELS[-1][0] == "Paling peka"
+    session = tmp_path / "sesi.json"
+    for stored, level in ((3, 3), (99, 4), (-1, 0), ("x", 0)):
+        ujian.prefs_path(session).write_text(f'{{"kepekaan_baca": {stored!r}}}'.replace("'", '"'))
+        assert ujian.load_prefs(session)[ujian.PREF_SENSITIVITY] == level

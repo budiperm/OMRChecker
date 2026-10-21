@@ -171,6 +171,8 @@ def run_worker(q, input_dir, output_dir, options):
                 config.outputs.show_image_level = 0
             if options.get("auto_align"):
                 config.alignment_params.auto_align = True
+            for key, value in options.get("threshold_params", {}).items():
+                config.threshold_params[key] = value  # the wizard's "Kepekaan baca"
             return config
 
         # CONFIG_DEFAULTS is used as-is when a folder has no config.json
