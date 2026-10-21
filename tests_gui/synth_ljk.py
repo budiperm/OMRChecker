@@ -137,6 +137,21 @@ def fill(img, layout, responses, seed=0):
     return out
 
 
+def cross(img, layout, responses, seed=0, thick=3, shade=40):
+    """Thin ballpoint crosses (X) over the chosen bubbles instead of shading;
+    number blocks shaded as usual. Read as blank at the normal sensitivity."""
+    rnd = random.Random(seed)
+    out = fill(img, layout, {k: v for k, v in responses.items() if not k.startswith("q")}, seed)
+    for label, value in responses.items():
+        if not label.startswith("q"):
+            continue
+        cx, cy = layout.fields[label][value]
+        cx, cy, a = cx + rnd.randint(-3, 3), cy + rnd.randint(-3, 3), int(R * 0.7)
+        for d in (1, -1):
+            cv2.line(out, (cx - a, cy - d * a), (cx + a, cy + d * a), (shade,) * 3, thick, cv2.LINE_AA)
+    return out
+
+
 def distort(img, angle=0.0, dx=0, dy=0, scale=1.0, noise=0.0, jpeg=None, seed=0):
     """Simulate how a sheet lands on the scanner glass."""
     h, w = img.shape[:2]

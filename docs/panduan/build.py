@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 ACCENT = colors.HexColor("#005fb8")
 SOFT = colors.HexColor("#eef4fc")
 MUTED = colors.HexColor("#5f6b7a")
@@ -42,7 +42,7 @@ CALLOUTS = {  # each marker sits on the top-left corner of what it points at
     "05_scan_dialog": [(22, 30), (22, 90), (22, 182), (22, 218), (460, 390)],
     "06_hasil": [(293, 137), (293, 219), (296, 262)],
     "07_siap": [(279, 108), (770, 104)],
-    "08_proses": [(285, 183), (868, 199), (1090, 108), (264, 716)],
+    "08_proses": [(285, 213), (868, 229), (1090, 108), (264, 716), (264, 150)],
     "09_koreksi": [(14, 40), (14, 106), (10, 637), (847, 637)],
     "10_rekap": [(264, 118), (293, 165), (279, 652), (1037, 696)],
     "11_tutup": [(484, 343), (562, 343), (736, 343)],
@@ -381,7 +381,11 @@ def main(shots, out_pdf):
                         "<b>Buka di aplikasi</b> untuk melihatnya lebih besar.",
                         "<b>Koreksi...</b> (atau klik dua kali baris) untuk membetulkan bacaan. <b>Log</b> menampilkan "
                         "catatan teknis proses.",
-                        "Ringkasan: jumlah LJK, yang perlu dicek, rata-rata, nilai tertinggi dan terendah."]),
+                        "Ringkasan: jumlah LJK, yang perlu dicek, rata-rata, nilai tertinggi dan terendah.",
+                        "<b>Kepekaan baca.</b> Bila banyak jawaban yang dihitamkan tipis (atau disilang pulpen) "
+                        "terbaca kosong, geser ke kanan (<i>Agak peka</i> sampai <i>Paling peka</i>) lalu klik "
+                        "<b>Proses LJK</b> lagi. Makin peka, makin mungkin bekas hapusan ikut terbaca: periksa baris "
+                        "<i>Jawaban ganda</i>. Pilihan ini diingat untuk ujian berikutnya."]),
               p("Alasan baris merah", "h2"),
               table([["Keterangan", "Yang perlu dilakukan"],
                      ["LJK tidak terbaca (kotak sudut/halaman tidak ditemukan)",

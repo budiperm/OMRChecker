@@ -383,6 +383,8 @@ class Dashboard(wz.Wizard):
         self.ready_text = tk.Label(texts, text=message, bg=theme.SURFACE, fg=theme.FG, font="SunValleySubtitleFont", anchor="w")
         self.ready_text.pack(fill="x")
         tk.Label(texts, text=detail, bg=theme.SURFACE, fg=theme.MUTED, anchor="w", justify="left").pack(fill="x", pady=(2, 0))
+        self.sensitivity = wz.sensitivity_slider(texts, self, bg=theme.SURFACE, tip_below=True)
+        self.sensitivity.pack(fill="x", pady=(8, 0))
         self.process_btn = ttk.Button(panel, text="▶  Proses LJK", command=self.process, style="Accent.TButton",
                                       state="normal" if ready else "disabled")  # fmt: skip
         self.process_btn.pack(side="right", padx=20, ipady=6)

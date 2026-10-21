@@ -572,7 +572,7 @@ def test_remember_folder_checkboxes(setup, monkeypatch):
         # check "remember" in step 3: saved right away as a preference
         w.steps[2].remember.invoke()
         assert ujian.load_prefs(tmp / "sesi.json") == {ujian.PREF_SCANS: True, ujian.PREF_OUTPUT: False,
-                                                     ujian.PREF_DASHBOARD: False}
+                                                     ujian.PREF_DASHBOARD: False, ujian.PREF_SENSITIVITY: 0}
         w.steps[2].folder.set(str(scans))
         w.next()
         assert w.current == 3 and w.steps[3].folder.get().endswith("scan_hasil")
@@ -592,6 +592,63 @@ def test_remember_folder_checkboxes(setup, monkeypatch):
         pump(w)
         assert w.steps[2].remember.var.get() and w.steps[3].remember.var.get()
         assert w.exam.scans_dir == str(scans) and w.exam.output_dir == str(hasil)
+    finally:
+        w.destroy()
+
+
+def test_sensitivity_slider_reads_pen_crosses(setup, monkeypatch):
+    """Step 5 'Kepekaan baca': thin pen crosses are blank at Normal and read
+    when the slider is moved right (an app preference); shaded sheets stay
+    exactly right at the most sensitive level."""
+    import wizard as wz
+
+    lib, scans, tmp = setup
+    monkeypatch.setattr(wz.messagebox, "askyesno", lambda *a, **k: False)
+    img, layout = synth.make_blank()
+    expected = {f"siswa_{k + 1}.jpg": synth.random_responses(layout, seed=k) for k in range(2)}
+    expected["silang.jpg"] = synth.random_responses(layout, seed=5)
+    crossed = synth.distort(synth.cross(img, layout, expected["silang.jpg"], seed=5), noise=4, jpeg=85, seed=5)
+    cv2.imencode(".jpg", crossed)[1].tofile(str(scans / "silang.jpg"))
+    (scans / "kosong.jpg").unlink()
+    ujian.Exam(scans_dir=str(scans), output_dir=str(tmp / "hasil")).save(tmp / "sesi.json")
+
+    def answers(w):
+        rows, _ = ujian.read_results(w.exam.output_dir)
+        return {r["file_id"]: {f"q{i}": r[f"q{i}"] for i in range(1, layout.questions + 1)} for r in rows}
+
+    def want(name):
+        return {k: v for k, v in synth.expected_row(layout, expected[name]).items() if k.startswith("q")}
+
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        assert w.prefs[ujian.PREF_SENSITIVITY] == 0
+        run_to_results(w)
+        got = answers(w)
+        assert got["siswa_1.jpg"] == want("siswa_1.jpg")
+        assert not any(got["silang.jpg"].values()), "crosses are not read at Normal"
+
+        slider = w.steps[4].sensitivity
+        slider.scale.set(3.6)  # snaps to the nearest step
+        assert slider.scale.get() == 4 and w.prefs[ujian.PREF_SENSITIVITY] == 4
+        assert ujian.load_prefs(tmp / "sesi.json")[ujian.PREF_SENSITIVITY] == 4
+        step = w.steps[4]
+        step.run_btn.invoke()
+        deadline = time.time() + 300
+        while step.proc is not None:
+            w.update()
+            time.sleep(0.05)
+            assert time.time() < deadline
+        pump(w, 20)
+        got = answers(w)
+        for name in expected:
+            assert got[name] == want(name), name
+    finally:
+        w.destroy()
+    # the slider starts where it was left
+    w = wz.run_wizard(mainloop=False, library=lib, settings=tmp / "sesi.json")
+    try:
+        pump(w)
+        assert w.steps[4].sensitivity.scale.get() == 4
     finally:
         w.destroy()
 

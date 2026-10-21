@@ -25,7 +25,7 @@ import theme
 import ujian
 
 APP_TITLE = "OMRChecker - Pemindai LJK"
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 STEPS = ["Template LJK", "Kunci jawaban", "Folder LJK peserta", "Folder hasil",
          "Proses & periksa", "Rekap & ekspor"]  # fmt: skip
 PROJECT_URL = "https://github.com/budiperm/OMRChecker"
@@ -678,6 +678,46 @@ def remember_box(parent, wizard, key):
     return box
 
 
+def sensitivity_slider(parent, wizard, bg=None, tip_below=False):
+    """'Kepekaan baca' slider (an app preference): Normal ... Paling peka, for
+    sheets whose light shading or pen crosses are read as blank."""
+    levels = ujian.SENSITIVITY_LEVELS
+
+    def label(master, **kw):
+        if bg:
+            return tk.Label(master, bg=bg, fg=kw.pop("foreground", theme.FG), anchor="w", **kw)
+        return ttk.Label(master, **kw)
+
+    box = tk.Frame(parent, bg=bg) if bg else ttk.Frame(parent)
+    row = tk.Frame(box, bg=bg) if bg else ttk.Frame(box)
+    row.pack(fill="x")
+    label(row, text="Kepekaan baca:").pack(side="left")
+    var = tk.IntVar(value=wizard.prefs[ujian.PREF_SENSITIVITY])
+    name = tk.StringVar(value=levels[var.get()][0])
+
+    def changed(value):
+        level = ujian.sensitivity_level(round(float(value)))
+        if box.scale.get() != level:
+            box.scale.set(level)  # snap to the 5 steps
+        name.set(levels[level][0])
+        if level != wizard.prefs[ujian.PREF_SENSITIVITY]:
+            var.set(level)
+            wizard.set_pref(ujian.PREF_SENSITIVITY, level)
+
+    box.scale = ttk.Scale(row, from_=0, to=len(levels) - 1, length=160, command=changed)
+    box.scale.set(var.get())
+    box.scale.pack(side="left", padx=6)
+    label(row, textvariable=name, width=11).pack(side="left")
+    tip = "Geser ke kanan bila jawaban tipis tidak terbaca (bekas hapusan bisa ikut terbaca)."
+    if tip_below:
+        label(box, text=tip, foreground=theme.MUTED).pack(fill="x")
+    else:
+        label(row, text=tip, foreground=theme.MUTED).pack(side="left")
+    box.var = var
+    box.sync = lambda: box.scale.set(wizard.prefs[ujian.PREF_SENSITIVITY])  # changed elsewhere
+    return box
+
+
 class ScansStep(Step):
     title = "Folder LJK peserta & daftar peserta"
     hint = "Pilih folder hasil scan (JPG/PNG/PDF, subfolder ikut dibaca) atau scan langsung. Daftar peserta opsional."
@@ -971,6 +1011,8 @@ class ProcessStep(Step):
         ttk.Label(top, textvariable=self.progress_text).pack(side="left")
         ttk.Button(top, text="Log", command=self.show_log).pack(side="right")
         ttk.Button(top, text="Koreksi...", command=self.correct).pack(side="right", padx=4)
+        self.sensitivity = sensitivity_slider(self, wizard)
+        self.sensitivity.pack(fill="x", pady=(6, 0))
 
         split = ttk.Panedwindow(self, orient="horizontal")
         split.pack(fill="both", expand=True, pady=6)
@@ -1011,6 +1053,7 @@ class ProcessStep(Step):
     def enter(self):
         # never starts by itself: the user clicks "Proses LJK" when ready
         self.total = ujian.count_sheets(scan_files(self.exam.scans_dir))
+        self.sensitivity.sync()
         self.load_results()
         if self.proc is None:  # how many sheets there are, before anything runs
             self.progress.configure(maximum=max(1, self.total), value=0)
@@ -1058,7 +1101,8 @@ class ProcessStep(Step):
         self.progress_text.set(f"0 / {self.total}")
         ctx = mp.get_context("spawn")
         self.q = ctx.Queue()
-        options = {"template_dir": self.exam.template, "skip": skip}
+        options = {"template_dir": self.exam.template, "skip": skip,
+                   "threshold_params": ujian.threshold_params(self.wizard.prefs[ujian.PREF_SENSITIVITY])}  # fmt: skip
         self.proc = ctx.Process(target=gui.run_worker, args=(self.q, self.exam.scans_dir, str(out), options), daemon=True)
         self.proc.start()
         self.run_btn.configure(state="disabled")
@@ -2019,7 +2063,7 @@ class Wizard(tk.Tk):
                                    blank_source=self.template.source)  # fmt: skip
 
     def set_pref(self, key, value):
-        self.prefs[key] = bool(value)
+        self.prefs[key] = ujian.sensitivity_level(value) if key == ujian.PREF_SENSITIVITY else bool(value)
         try:
             ujian.save_prefs(self.prefs, self.settings)
         except OSError:
