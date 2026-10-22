@@ -894,6 +894,22 @@ def show_fatal_error(text):
     print(text, file=sys.__stderr__ or sys.stderr)
 
 
+def check_pdf(path):
+    """Render the first page of a PDF, for the release smoke test: exit 0 when
+    PyMuPDF works in the frozen build, 2 with the traceback (no dialog) if not."""
+    try:
+        import fitz
+
+        with fitz.open(path) as doc:
+            pages = doc.page_count
+            pix = doc[0].get_pixmap(dpi=50, colorspace=fitz.csGRAY)
+    except Exception:
+        traceback.print_exc()
+        return 2
+    print(f"PDF terbaca: {pages} halaman, {pix.width}x{pix.height}")
+    return 0
+
+
 def main():
     # Windowed builds have no console: record startup progress, Python
     # exceptions and native crashes in crash.log so silent exits can be traced.
@@ -915,6 +931,8 @@ def main():
             import scanner
 
             return scanner.main()
+        if "--cek-pdf" in sys.argv:  # OMRChecker-debug.exe --cek-pdf file.pdf
+            return check_pdf(sys.argv[sys.argv.index("--cek-pdf") + 1])
         if "--lanjutan" in sys.argv:
             run_gui()  # advanced mode: the original single window
         else:
