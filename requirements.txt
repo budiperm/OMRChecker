@@ -6,4 +6,5 @@ numpy>=1.25.0
 pandas>=2.0.2
 rich>=13.4.2
 screeninfo>=0.8.1
-PyMuPDF>=1.23.0
+# 2.0 loads a layout AI model on import (needs onnxruntime and data files)
+PyMuPDF>=1.23.0,<2

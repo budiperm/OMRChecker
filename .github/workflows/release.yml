@@ -91,7 +91,7 @@ jobs:
             "--noupx", "--paths", ".", "--collect-submodules", "src",
             "--hidden-import", "openpyxl", "--hidden-import", "xlrd", "--hidden-import", "win32com.client",
             "--hidden-import", "pythoncom", "--hidden-import", "pywintypes",
-            "--collect-data", "sv_ttk", "--icon", "assets\icon.ico",
+            "--exclude-module", "pymupdf.layout", "--collect-data", "sv_ttk", "--icon", "assets\icon.ico",
             "--add-data", "assets\icon.ico;assets", "--add-data", "assets\icon.png;assets",
             "--add-data", "assets\logo.png;assets", "--add-data", "LICENSE;.", "--add-data", "LICENSE-OMRChecker-asli-MIT.txt;."
           )
@@ -116,6 +116,9 @@ jobs:
                  -RedirectStandardOutput cek.txt -RedirectStandardError cek-err.txt
           Get-Content cek.txt, cek-err.txt
           if ($p.ExitCode -gt 1) { Write-Error "OMRChecker-debug.exe keluar dengan kode $($p.ExitCode)"; exit 1 }
+          # PDF scan harus bisa dibaca (PyMuPDF 2.0 sempat gagal karena data layout tak ikut)
+          & dist\OMRChecker-debug.exe --cek-pdf PANDUAN.pdf
+          if ($LASTEXITCODE) { Write-Error "OMRChecker-debug.exe tidak bisa membaca PDF"; exit 1 }
 
       - name: Kumpulkan lisensi pihak ketiga
         shell: pwsh
