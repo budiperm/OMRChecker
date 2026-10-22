@@ -7,11 +7,13 @@ Run: python -m pytest tests_gui
 import csv
 import dataclasses
 import json
+import random
 import subprocess
 import sys
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,7 @@ sys.path[:0] = [str(ROOT), str(Path(__file__).parent)]
 import synth_ljk as synth  # noqa: E402
 import template_builder as tb  # noqa: E402
 
+R = synth.R
 SCALE = 1240 / synth.W  # synthetic 300 DPI pixels -> template pixels
 
 # Region of the synthetic sheet -> output column name a user would type
@@ -277,3 +280,59 @@ def test_saved_files(tmp_path, blank, detected):
     assert config["dimensions"]["processing_width"] == dims[0]
     ref = cv2.imread(str(tmp_path / tb.REFERENCE_FILENAME), cv2.IMREAD_GRAYSCALE)
     assert ref.shape == (dims[1], dims[0])
+
+
+def grey_phone_scan(img, layout, responses, seed):
+    """A sheet photographed with a phone scanner app: grey paper, soft focus
+    and light pencil, so empty bubbles (~200) are not far from the marks."""
+    rnd = random.Random(seed)
+    out = img.copy()
+    for label, value in responses.items():
+        cx, cy = layout.fields[label][value]
+        shade = rnd.randint(40, 170)
+        cv2.ellipse(out, (cx, cy), (R - 5, R - 6), rnd.randint(0, 180), 0, 360, (shade,) * 3, -1, cv2.LINE_AA)
+    out = cv2.GaussianBlur(out, (0, 0), 3)
+    out = (out.astype(np.float32) * 0.35 + 140).astype(np.uint8)
+    return synth.distort(out, angle=0.4, noise=3, jpeg=80, seed=seed)
+
+
+def test_grey_phone_scan_leaves_empty_bubbles_empty(tmp_path, blank, detected):
+    """Reported case: on a grey, low-contrast phone scan the threshold fell
+    back to a fixed 200, in the middle of the empty bubbles, and letters with
+    more ink (B, M, W) were read as marked in every empty column."""
+    img, layout, _, page = blank
+    blocks = label_like_user([*detected[1]], layout)
+    exam = tmp_path / "ujian"
+    sheet = dataclasses.replace(page, source_name="ljk kosong.jpg")
+    template, _ = tb.build_template(blocks, sheet)
+    tb.save_template_folder(exam, sheet, template, None)
+    cv2.imencode(".jpg", img)[1].tofile(str(exam / "ljk kosong.jpg"))  # not graded
+
+    expected = {}
+    for k in range(2):
+        responses = synth.random_responses(layout, seed=40 + k, blank_rate=0.6)
+        name = f"hp_{k}.jpg"
+        cv2.imencode(".jpg", grey_phone_scan(img, layout, responses, k))[1].tofile(str(exam / name))
+        expected[name] = synth.expected_row(layout, responses)
+
+    out = tmp_path / "hasil"
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "gui.py"), "--process", str(exam), str(out)],
+        capture_output=True, text=True, timeout=600,
+    )
+    log = (out / "omrchecker_log.txt").read_text(encoding="utf-8") if out.exists() else ""
+    assert proc.returncode == 0, log[-3000:] + proc.stderr[-2000:]
+    with open(next((out / "Results").glob("Results_*.csv")), newline="", encoding="utf-8") as f:
+        rows = {r["file_id"]: r for r in csv.DictReader(f)}
+    # Only clearly shaded answers have to be read; the lightest ones may be
+    # missed, but no empty bubble may be read as marked.
+    wrong, read, answered = [], 0, 0
+    for name, exp in expected.items():
+        for q in range(1, layout.questions + 1):
+            got, want = rows[name][f"q{q}"], exp[f"q{q}"]
+            if got not in ("", want):
+                wrong.append(f"{name} q{q}: got {got!r}, expected {want!r}")
+            answered += bool(want)
+            read += bool(want) and got == want
+    assert not wrong, "\n".join(wrong[:20])
+    assert read >= 0.8 * answered, f"{read}/{answered} answers read"

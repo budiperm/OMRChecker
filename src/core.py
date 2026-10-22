@@ -249,7 +249,23 @@ class ImageInstanceOps:
             # Note: Plotting takes Significant times here --> Change Plotting args
             # to support show_image_level
             # , "Mean Intensity Histogram",plot_show=True, sort_in_plot=True)
-            global_thr, _, _ = self.get_global_threshold(all_q_vals, looseness=4)
+            # Spots with no printed bubble (a gap in a block, e.g. the short
+            # columns of a birth date grid) read as pure paper. Their jump up
+            # from the empty bubbles is bigger than the one down to the marks
+            # and would put the threshold above the empty bubbles, so only
+            # look at values up to a little over the empty bubbles' level
+            # (most bubbles on a sheet are empty, so that is the median).
+            # Without a clear jump the threshold falls back to a fixed 200,
+            # which on a grey phone scan (empty bubbles ~190-215) is in the
+            # middle of the empty bubbles: letters with more ink (B, M, W)
+            # then read as marked. Keep the fallback below the empty bubbles.
+            empty_level = float(np.median(all_q_vals))
+            min_jump = config.threshold_params.MIN_JUMP
+            global_thr, _, _ = self.get_global_threshold(
+                [v for v in all_q_vals if v <= empty_level + min_jump],
+                looseness=4,
+                max_default=empty_level - min_jump,
+            )
 
             logger.info(
                 f"Thresholding: \tglobal_thr: {round(global_thr, 2)} \tglobal_std_THR: {round(global_std_thresh, 2)}\t{'(Looks like a Xeroxed OMR)' if (global_thr == 255) else ''}"
@@ -503,6 +519,7 @@ class ImageInstanceOps:
         plot_show=True,
         sort_in_plot=True,
         looseness=1,
+        max_default=None,
     ):
         """
         Note: Cannot assume qStrip has only-gray or only-white bg
@@ -544,6 +561,8 @@ class ImageInstanceOps:
             if PAGE_TYPE_FOR_THRESHOLD == "white"
             else GLOBAL_PAGE_THRESHOLD_BLACK
         )
+        if max_default is not None:
+            global_default_threshold = min(global_default_threshold, max_default)
 
         # Sort the Q bubbleValues
         # TODO: Change var name of q_vals
