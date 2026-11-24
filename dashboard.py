@@ -56,36 +56,52 @@ def results_match_scans(out, scans):
 
 
 class Card(tk.Frame):
-    """One setting: title, status, value, detail and its buttons."""
+    """One setting: numbered header, status pill, value, detail and action row."""
 
-    STATUS = {"ok": ("✓ Siap", theme.DONE), "warn": ("Belum lengkap", theme.WARN),
-              "todo": ("Belum diisi", theme.WARN)}  # fmt: skip
+    STATUS = {
+        "ok": ("✓ Siap", theme.DONE, theme.DONE_SOFT, theme.DONE),
+        "warn": ("Belum lengkap", theme.WARN, theme.WARN_SOFT, theme.WARN),
+        "todo": ("Belum diisi", theme.WARN, theme.WARN_SOFT, theme.BORDER_STRONG),
+    }
 
-    def __init__(self, master, title, status, value, detail, actions):
+    def __init__(self, master, title, status, value, detail, actions, number=None):
         super().__init__(master, bg=theme.SURFACE, highlightthickness=1, highlightbackground=theme.BORDER)
+        text, fg, badge_bg, stripe = self.STATUS[status]
+        tk.Frame(self, bg=stripe, height=3).pack(fill="x")
+
         head = tk.Frame(self, bg=theme.SURFACE)
-        head.pack(fill="x", padx=16, pady=(14, 4))
-        tk.Label(head, text=title.upper(), bg=theme.SURFACE, fg=theme.MUTED, font="SunValleyCaptionFont").pack(side="left")
-        text, colour = self.STATUS[status]
-        self.status = tk.Label(head, text=text, bg=theme.SURFACE, fg=colour, font="SunValleyBodyStrongFont")
+        head.pack(fill="x", padx=18, pady=(14, 6))
+        if number is not None:
+            num_bg = theme.DONE_SOFT if status == "ok" else theme.ACCENT_SOFT
+            num_fg = theme.DONE if status == "ok" else theme.ACCENT
+            tk.Label(head, text=str(number), bg=num_bg, fg=num_fg, font="SunValleyCaptionStrongFont",
+                     width=2, pady=1).pack(side="left", padx=(0, 8))  # fmt: skip
+        tk.Label(head, text=title.upper(), bg=theme.SURFACE, fg=theme.MUTED, font="SunValleyCaptionStrongFont").pack(
+            side="left"
+        )
+        self.status = theme.badge(head, text, fg=fg, bg=badge_bg)
         self.status.pack(side="right")
+
         self.value = tk.Label(self, text=value, bg=theme.SURFACE, fg=theme.FG, font="SunValleySubtitleFont",
                               anchor="w", justify="left")  # fmt: skip
-        self.value.pack(fill="x", padx=16)
+        self.value.pack(fill="x", padx=18)
         self.detail = tk.Label(self, text=detail, bg=theme.SURFACE, fg=theme.MUTED, anchor="nw", justify="left")
-        self.detail.pack(fill="both", expand=True, padx=16, pady=(4, 8))
+        self.detail.pack(fill="both", expand=True, padx=18, pady=(4, 10))
+
         bar = tk.Frame(self, bg=theme.SURFACE)
-        bar.pack(fill="x", padx=16, pady=(0, 14))
+        bar.pack(fill="x", padx=18, pady=(0, 14))
         self.buttons = []
-        for label, command, accent in actions:  # one per row: a card is narrow on a small screen
+        for idx, (label, command, accent) in enumerate(actions):
             b = ttk.Button(bar, text=label, command=command, style="Accent.TButton" if accent else "TButton")
-            b.pack(anchor="w", fill="x" if len(actions) > 1 else "none", pady=(0, 6))
+            b.pack(side="left", padx=(0 if idx == 0 else 8, 0))
             self.buttons.append(b)
         self.bind("<Configure>", lambda e: self.wrap(e.width))
+        self.bind("<Enter>", lambda e: self.configure(highlightbackground=theme.BORDER_STRONG))
+        self.bind("<Leave>", lambda e: self.configure(highlightbackground=theme.BORDER))
 
     def wrap(self, width):
         for label in (self.value, self.detail):
-            label.configure(wraplength=max(120, width - 36))
+            label.configure(wraplength=max(160, width - 40))
 
 
 class Dashboard(wz.Wizard):
@@ -94,63 +110,69 @@ class Dashboard(wz.Wizard):
         self.editing = None  # (step index, exam before editing, template before editing)
         self.view = None
 
-        # header: app name, exam name, exam actions
+        # header: app brand, exam name, exam actions
         head = tk.Frame(self, bg=theme.SURFACE)
         head.pack(fill="x")
         brand = tk.Frame(head, bg=theme.SURFACE)
-        brand.pack(side="left", padx=(24, 20), pady=12)
+        brand.pack(side="left", padx=(24, 24), pady=12)
         self.logo = theme.logo(self)
         if self.logo:
             tk.Label(brand, image=self.logo, bg=theme.SURFACE).pack(side="left", padx=(0, 10))
         names = tk.Frame(brand, bg=theme.SURFACE)
         names.pack(side="left")
         tk.Label(names, text="Pemindai LJK", bg=theme.SURFACE, fg=theme.FG, font="SunValleySubtitleFont").pack(anchor="w")
-        tk.Label(names, text=f"OMRChecker v{wz.VERSION} • tampilan baru", bg=theme.SURFACE, fg=theme.MUTED,
+        tk.Label(names, text=f"OMRChecker v{wz.VERSION}", bg=theme.SURFACE, fg=theme.MUTED,
                  font="SunValleyCaptionFont").pack(anchor="w")  # fmt: skip
+
+        tk.Frame(head, bg=theme.BORDER, width=1).pack(side="left", fill="y", pady=12)
+
         exam = tk.Frame(head, bg=theme.SURFACE)
-        exam.pack(side="left", fill="x", expand=True, pady=10)
-        tk.Label(exam, text="Nama ujian", bg=theme.SURFACE, fg=theme.MUTED, font="SunValleyCaptionFont").pack(anchor="w")
+        exam.pack(side="left", fill="x", expand=True, padx=(20, 16), pady=10)
+        tk.Label(exam, text="NAMA UJIAN", bg=theme.SURFACE, fg=theme.MUTED, font="SunValleyCaptionStrongFont").pack(anchor="w")
         self.exam_name = tk.StringVar(value=self.exam.name)
-        self.name_entry = ttk.Entry(exam, textvariable=self.exam_name, width=40)
-        self.name_entry.pack(anchor="w")
+        self.name_entry = ttk.Entry(exam, textvariable=self.exam_name, width=36)
+        self.name_entry.pack(anchor="w", pady=(2, 0))
         self.exam_name.trace_add("write", lambda *a: setattr(self.exam, "name", self.exam_name.get().strip()))
+
         actions = tk.Frame(head, bg=theme.SURFACE)
         actions.pack(side="right", padx=24)
         self.help_btn = ttk.Button(actions, text="Bantuan", command=self.show_help_menu)
         self.help_btn.pack(side="right")
-        self.open_btn = ttk.Button(actions, text="Buka ujian lama...", command=self.open_exam)
-        self.open_btn.pack(side="right", padx=6)
-        self.new_btn = ttk.Button(actions, text="Ujian baru", command=self.new_exam)
-        self.new_btn.pack(side="right")
-        ttk.Separator(self).pack(fill="x")
+        self.mode_btn = ttk.Button(actions, text="Mode langkah", command=self.switch_look)
+        self.mode_btn.pack(side="right", padx=(0, 6))
+        self.open_btn = ttk.Button(actions, text="Buka ujian...", command=self.open_exam)
+        self.open_btn.pack(side="right", padx=(0, 6))
+        self.new_btn = ttk.Button(actions, text="+ Ujian baru", command=self.new_exam)
+        self.new_btn.pack(side="right", padx=(0, 6))
+        tk.Frame(self, bg=theme.BORDER, height=1).pack(fill="x")
 
         main = ttk.Frame(self)
         main.pack(fill="both", expand=True)
         top = ttk.Frame(main)
-        top.pack(fill="x", padx=28, pady=(18, 0))
+        top.pack(fill="x", padx=28, pady=(20, 0))
         self.back_btn = ttk.Button(top, text="←  Ringkasan", command=self.show_home)
         self.heading = tk.StringVar()
         self.hint = tk.StringVar()
         self.titles = titles = ttk.Frame(top)
         titles.pack(side="left", fill="x", expand=True)
         ttk.Label(titles, textvariable=self.heading, style="Title.TLabel").pack(anchor="w")
-        ttk.Label(titles, textvariable=self.hint, foreground=theme.MUTED).pack(anchor="w", pady=(2, 0))
+        ttk.Label(titles, textvariable=self.hint, foreground=theme.MUTED).pack(anchor="w", pady=(3, 0))
         self.tabs = ttk.Frame(top)  # Hasil: participants / analysis & export
         self.tab_btns = []
         for i, label in enumerate(("Peserta & koreksi", "Analisis & ekspor")):
             b = ttk.Button(self.tabs, text=label, command=lambda i=i: self.show_tab(i))
-            b.pack(side="left", padx=(0, 4))
+            b.pack(side="left", padx=(0, 6))
             self.tab_btns.append(b)
 
         # editor footer
         self.foot = ttk.Frame(main, style="Footer.TFrame")
-        ttk.Separator(self.foot).pack(fill="x")
+        tk.Frame(self.foot, bg=theme.BORDER, height=1).pack(fill="x")
         self.save_btn = ttk.Button(self.foot, text="Simpan", command=self.save_editor, style="Accent.TButton")
         self.save_btn.pack(side="right", padx=28, pady=12)
         ttk.Button(self.foot, text="Batal", command=self.cancel_editor).pack(side="right", pady=12)
 
         self.body = ttk.Frame(main)
-        self.body.pack(fill="both", expand=True, padx=28, pady=(14, 14))
+        self.body.pack(fill="both", expand=True, padx=28, pady=(16, 18))
         self.home = ttk.Frame(self.body)
         self.chips = ttk.Frame(self.body)  # Hasil: the settings, each opens its editor
 
@@ -273,7 +295,7 @@ class Dashboard(wz.Wizard):
         for i, (title, status, value, _, _) in enumerate(self.cards()):
             mark = "✓" if status == "ok" else "!"
             value = value if len(value) <= 28 else "..." + value[-25:]
-            b = ttk.Button(self.chips, text=f"{mark} {EDITORS[i]}: {value}", style="Small.TButton",
+            b = ttk.Button(self.chips, text=f"{mark}  {EDITORS[i]}: {value}", style="Chip.TButton",
                            command=lambda i=i: self.open_editor(i))  # fmt: skip
             b.pack(side="left", padx=(0, 6))
 
@@ -365,41 +387,66 @@ class Dashboard(wz.Wizard):
         for w in self.home.winfo_children():
             w.destroy()
         grid = ttk.Frame(self.home)
-        grid.pack(fill="x")
+        grid.pack(fill="both", expand=True)
         cards = self.cards()
         self.card_widgets = []
         for i, (title, status, value, detail, actions) in enumerate(cards):
-            c = Card(grid, title, status, value, detail, actions)
-            c.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 12, 0))
-            grid.columnconfigure(i, weight=1, uniform="cards")
+            r, col = divmod(i, 2)
+            c = Card(grid, title, status, value, detail, actions, number=i + 1)
+            c.grid(row=r, column=col, sticky="nsew", padx=(0 if col == 0 else 14, 0), pady=(0 if r == 0 else 14, 0))
             self.card_widgets.append(c)
-        grid.rowconfigure(0, minsize=220)
+        grid.columnconfigure(0, weight=1, uniform="cards")
+        grid.columnconfigure(1, weight=1, uniform="cards")
+        grid.rowconfigure(0, weight=1, minsize=168)
+        grid.rowconfigure(1, weight=1, minsize=168)
 
         panel = tk.Frame(self.home, bg=theme.SURFACE, highlightthickness=1, highlightbackground=theme.BORDER)
         panel.pack(fill="x", pady=(16, 0))
-        texts = tk.Frame(panel, bg=theme.SURFACE)
-        texts.pack(side="left", fill="x", expand=True, padx=20, pady=18)
         ready, message, detail = self.readiness(cards)
-        self.ready_text = tk.Label(texts, text=message, bg=theme.SURFACE, fg=theme.FG, font="SunValleySubtitleFont", anchor="w")
+
+        top_row = tk.Frame(panel, bg=theme.SURFACE)
+        top_row.pack(fill="x", padx=20, pady=(16, 12))
+        texts = tk.Frame(top_row, bg=theme.SURFACE)
+        texts.pack(side="left", fill="x", expand=True)
+        self.ready_text = tk.Label(texts, text=message, bg=theme.SURFACE,
+                                   fg=theme.DONE if ready else theme.FG,
+                                   font="SunValleySubtitleFont", anchor="w")  # fmt: skip
         self.ready_text.pack(fill="x")
-        tk.Label(texts, text=detail, bg=theme.SURFACE, fg=theme.MUTED, anchor="w", justify="left").pack(fill="x", pady=(2, 0))
-        self.sensitivity = wz.sensitivity_slider(texts, self, bg=theme.SURFACE, tip_below=True)
-        self.sensitivity.pack(fill="x", pady=(8, 0))
-        self.process_btn = ttk.Button(panel, text="▶  Proses LJK", command=self.process, style="Accent.TButton",
+        if detail:
+            tk.Label(texts, text=detail, bg=theme.SURFACE, fg=theme.MUTED, anchor="w", justify="left").pack(
+                fill="x", pady=(2, 0)
+            )
+        btns = tk.Frame(top_row, bg=theme.SURFACE)
+        btns.pack(side="right", padx=(16, 0))
+        self.process_btn = ttk.Button(btns, text="▶  Proses LJK", command=self.process, style="Accent.TButton",
                                       state="normal" if ready else "disabled")  # fmt: skip
-        self.process_btn.pack(side="right", padx=20, ipady=6)
+        self.process_btn.pack(side="right", ipady=4)
         out = Path(self.exam.output_dir) if self.exam.output_dir else None
         has_results = bool(self.template and out and out.is_dir() and ujian.current(out, "Results/Results_*.csv"))
-        self.last_btn = ttk.Button(panel, text="Lihat hasil terakhir", command=self.show_last,
+        self.last_btn = ttk.Button(btns, text="Lihat hasil terakhir", command=self.show_last,
                                    state="normal" if has_results else "disabled")  # fmt: skip
-        self.last_btn.pack(side="right", ipady=6)
+        self.last_btn.pack(side="right", padx=(0, 8), ipady=4)
+
+        tk.Frame(panel, bg=theme.BORDER, height=1).pack(fill="x")
+        sens_bar = tk.Frame(panel, bg=theme.SURFACE_ALT)
+        sens_bar.pack(fill="x")
+        self.sensitivity = wz.sensitivity_slider(sens_bar, self, bg=theme.SURFACE_ALT, tip_below=False)
+        self.sensitivity.pack(fill="x", padx=20, pady=8)
 
         if self.exam.exported_file and not self.export_pending():
-            tk.Label(self.home, text=f"✓ Rekap terakhir sudah diekspor: {Path(self.exam.exported_file).name}",
-                     fg=theme.DONE, bg=theme.BG).pack(anchor="w", pady=(12, 0))  # fmt: skip
+            bar = tk.Frame(self.home, bg=theme.DONE_SOFT, highlightthickness=1, highlightbackground="#bbf7d0")
+            bar.pack(fill="x", pady=(12, 0))
+            tk.Label(bar, text=f"✓  Rekap terakhir sudah diekspor: {Path(self.exam.exported_file).name}",
+                     fg=theme.DONE, bg=theme.DONE_SOFT, font="SunValleyBodyStrongFont").pack(
+                anchor="w", padx=14, pady=8
+            )
         elif self.export_pending():
-            tk.Label(self.home, text="Hasil terakhir belum diekspor: buka 'Lihat hasil terakhir' lalu ekspor.",
-                     fg=theme.WARN, bg=theme.BG).pack(anchor="w", pady=(12, 0))  # fmt: skip
+            bar = tk.Frame(self.home, bg=theme.WARN_SOFT, highlightthickness=1, highlightbackground="#fde68a")
+            bar.pack(fill="x", pady=(12, 0))
+            tk.Label(bar, text="Rekap hasil terakhir belum diekspor — buka 'Lihat hasil terakhir' untuk mengekspor.",
+                     fg=theme.WARN, bg=theme.WARN_SOFT, font="SunValleyBodyStrongFont").pack(
+                anchor="w", padx=14, pady=8
+            )
 
     def readiness(self, cards):
         statuses = [c[1] for c in cards]
@@ -470,7 +517,7 @@ class Dashboard(wz.Wizard):
     def set_busy(self, busy):
         self.busy = busy
         state = "disabled" if busy else "normal"
-        for b in (self.back_btn, self.new_btn, self.open_btn, *self.tab_btns, *self.chips.winfo_children()):
+        for b in (self.back_btn, self.new_btn, self.open_btn, self.mode_btn, *self.tab_btns, *self.chips.winfo_children()):
             b.configure(state=state)
 
     def show_help_menu(self):

@@ -35,7 +35,7 @@ LICENSE_FILES = ("LISENSI.txt", "LICENSE")  # this program: GNU AGPL-3.0
 NOTICE_FILES = ("PEMBERITAHUAN-PIHAK-KETIGA.txt", "LICENSE-OMRChecker-asli-MIT.txt")  # upstream MIT and others
 SCAN_TYPES = (".jpg", ".jpeg", ".png", ".pdf")
 ARCHIVE_DIR = ujian.ARCHIVE_DIR  # old scans moved here by "Arsipkan scan lama"; never read
-RED, BLUE = "#ffd7d5", "#dbe9ff"
+RED, BLUE = theme.DANGER_SOFT, theme.INFO_SOFT
 
 
 def scan_files(folder):
@@ -73,23 +73,25 @@ def read_image(path):
     return cv2.imdecode(np.fromfile(str(path), np.uint8), cv2.IMREAD_COLOR)
 
 
-class ImagePreview(ttk.Frame):
-    """Scrollable image with zoom buttons; fits the width by default."""
+class ImagePreview(tk.Frame):
+    """Scrollable image inside a crisp card with zoom toolbar; fits width by default."""
 
     def __init__(self, master, title=""):
-        super().__init__(master)
-        bar = ttk.Frame(self)
-        bar.pack(fill="x")
+        super().__init__(master, bg=theme.SURFACE, highlightthickness=1, highlightbackground=theme.BORDER)
+        bar = tk.Frame(self, bg=theme.SURFACE)
+        bar.pack(fill="x", padx=10, pady=(8, 6))
         ttk.Button(bar, text="−", width=2, style="Small.TButton", command=lambda: self.zoom(1 / 1.25)).pack(side="left")
-        ttk.Button(bar, text="+", width=2, style="Small.TButton", command=lambda: self.zoom(1.25)).pack(side="left", padx=2)
-        ttk.Button(bar, text="Pas lebar", style="Small.TButton", command=lambda: self.zoom(None)).pack(side="left", padx=2)
+        ttk.Button(bar, text="+", width=2, style="Small.TButton", command=lambda: self.zoom(1.25)).pack(side="left", padx=3)
+        ttk.Button(bar, text="Pas lebar", style="Small.TButton", command=lambda: self.zoom(None)).pack(side="left", padx=(0, 3))
         self.open_btn = ttk.Button(bar, text="Buka di aplikasi", style="Small.TButton", command=self.open_external)
         self.open_btn.pack(side="left")
         self.caption = tk.StringVar(value=title)
-        ttk.Label(self, textvariable=self.caption, foreground=theme.MUTED).pack(anchor="w")
-        frame = ttk.Frame(self)
+        tk.Label(self, textvariable=self.caption, bg=theme.SURFACE, fg=theme.MUTED,
+                 font="SunValleyCaptionFont", anchor="w").pack(fill="x", padx=12, pady=(0, 6))  # fmt: skip
+        tk.Frame(self, bg=theme.BORDER, height=1).pack(fill="x")
+        frame = tk.Frame(self, bg=theme.CANVAS_BG)
         frame.pack(fill="both", expand=True)
-        self.canvas = tk.Canvas(frame, background="#e4e8ee", highlightthickness=0)
+        self.canvas = tk.Canvas(frame, background=theme.CANVAS_BG, highlightthickness=0)
         vs = ttk.Scrollbar(frame, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=vs.set)
         self.canvas.grid(row=0, column=0, sticky="nsew")
@@ -144,14 +146,15 @@ class ImagePreview(ttk.Frame):
 class ScrollFrame(ttk.Frame):
     """A frame whose content scrolls vertically (`self.inner`)."""
 
-    def __init__(self, master, **kw):
+    def __init__(self, master, bg=None, **kw):
         super().__init__(master, **kw)
-        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0)
+        canvas_bg = bg or theme.BG
+        self.canvas = tk.Canvas(self, background=canvas_bg, highlightthickness=0, borderwidth=0)
         vs = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=vs.set)
         self.canvas.pack(side="left", fill="both", expand=True)
         vs.pack(side="right", fill="y")
-        self.inner = ttk.Frame(self.canvas)
+        self.inner = ttk.Frame(self.canvas, style="Surface.TFrame" if bg == theme.SURFACE else "TFrame")
         self.window = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.window, width=e.width))
@@ -195,8 +198,8 @@ class TemplateStep(Step):
         self.columnconfigure(0, weight=11, uniform="split")
         self.columnconfigure(1, weight=9, uniform="split")
         self.rowconfigure(0, weight=1)
-        left = ttk.Frame(self)
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        left_card, left = theme.card(self, pad=(14, 14))
+        left_card.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
         self.tree = ttk.Treeview(left, columns=("soal", "dibuat"), show="tree headings", selectmode="browse")
         self.tree.heading("#0", text="Template")
         self.tree.heading("soal", text="Isi")
@@ -204,16 +207,17 @@ class TemplateStep(Step):
         self.tree.column("#0", width=180)
         self.tree.column("soal", width=200)
         self.tree.column("dibuat", width=130, stretch=False)
+        self.tree.tag_configure("odd", background=theme.STRIPE_BG)
         self.tree.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.on_select())
         self.tree.bind("<Double-1>", lambda e: self.wizard.next())
-        bar = ttk.Frame(left)
-        bar.pack(fill="x", pady=6)
-        ttk.Button(bar, text="+  Buat baru dari LJK kosong...", command=self.create, style="Accent.TButton").pack(side="left")
-        ttk.Button(bar, text="Edit...", command=self.edit).pack(side="left", padx=4)
-        ttk.Button(bar, text="Impor...", command=self.import_file).pack(side="left")
-        ttk.Button(bar, text="Ekspor...", command=self.export_file).pack(side="left", padx=4)
-        ttk.Button(bar, text="Hapus", command=self.delete).pack(side="left")
+        bar = ttk.Frame(left, style="Surface.TFrame")
+        bar.pack(fill="x", pady=(10, 0))
+        ttk.Button(bar, text="+  Buat baru...", command=self.create, style="Accent.TButton").pack(side="left")
+        ttk.Button(bar, text="Edit...", command=self.edit).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Impor...", command=self.import_file).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Ekspor...", command=self.export_file).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Hapus", command=self.delete).pack(side="right")
         self.preview = ImagePreview(self)
         self.preview.grid(row=0, column=1, sticky="nsew")
         self.templates = []
@@ -225,7 +229,8 @@ class TemplateStep(Step):
         self.templates = ujian.list_templates(self.wizard.library)
         self.tree.delete(*self.tree.get_children())
         for i, t in enumerate(self.templates):
-            self.tree.insert("", "end", iid=str(i), text=t.name, values=(t.summary(), t.created))
+            self.tree.insert("", "end", iid=str(i), text=t.name, values=(t.summary(), t.created),
+                             tags=("odd",) if i % 2 else ())  # fmt: skip
         target = next((i for i, t in enumerate(self.templates) if str(t.path) == str(select)), 0)
         if self.templates:
             self.tree.selection_set(str(target))
@@ -326,56 +331,57 @@ class KeyStep(Step):
 
     def __init__(self, wizard):
         super().__init__(wizard)
-        top = ttk.Frame(self)
+        top_card, top_inner = theme.card(self, pad=(16, 12))
+        top_card.pack(fill="x")
+        top = ttk.Frame(top_inner, style="Surface.TFrame")
         top.pack(fill="x")
         self.mode = tk.StringVar(value="single")
         ttk.Radiobutton(top, text="Satu kunci untuk semua LJK", variable=self.mode, value="single",
-                        command=self.on_mode).pack(side="left")  # fmt: skip
-        ttk.Radiobutton(top, text="Kunci berbeda per kode naskah, dibaca dari kolom:", variable=self.mode,
-                        value="code", command=self.on_mode).pack(side="left", padx=(16, 4))  # fmt: skip
+                        style="Surface.TRadiobutton", command=self.on_mode).pack(side="left")  # fmt: skip
+        ttk.Radiobutton(top, text="Per kode naskah (kolom):", variable=self.mode,
+                        value="code", style="Surface.TRadiobutton", command=self.on_mode).pack(side="left", padx=(16, 6))  # fmt: skip
         self.code_col = tk.StringVar()
-        self.code_box = ttk.Combobox(top, textvariable=self.code_col, state="readonly", width=18)
+        self.code_box = ttk.Combobox(top, textvariable=self.code_col, state="readonly", width=14)
         self.code_box.pack(side="left")
-        files = ttk.Frame(self)  # keys kept for the next exam on the same LJK template
-        files.pack(fill="x", pady=(6, 0))
-        ttk.Button(files, text="Buka kunci...", command=self.import_keys).pack(side="left")
-        ttk.Button(files, text="Simpan kunci...", command=self.export_keys).pack(side="left", padx=4)
-        ttk.Label(files, text="file kunci jawaban, untuk dipakai lagi dengan template LJK yang sama",
-                  foreground=theme.MUTED).pack(side="left", padx=4)  # fmt: skip
+        ttk.Button(top, text="Simpan kunci...", command=self.export_keys, style="Small.TButton").pack(side="right")
+        ttk.Button(top, text="Buka kunci...", command=self.import_keys, style="Small.TButton").pack(side="right", padx=(0, 6))
 
         mid = ttk.Frame(self)
-        mid.pack(fill="both", expand=True, pady=8)
-        self.codes_frame = ttk.LabelFrame(mid, text="Kode naskah")
-        self.codes = tk.Listbox(self.codes_frame, width=14, exportselection=False)
-        self.codes.pack(fill="both", expand=True, padx=4, pady=4)
+        mid.pack(fill="both", expand=True, pady=(12, 12))
+        self.codes_frame, codes_inner = theme.card(mid, title="Kode naskah", pad=(12, 12))
+        self.codes = tk.Listbox(codes_inner, width=14, exportselection=False)
+        self.codes.pack(fill="both", expand=True, pady=(0, 8))
         self.codes.bind("<<ListboxSelect>>", lambda e: self.show_code())
-        cb = ttk.Frame(self.codes_frame)
-        cb.pack(fill="x", padx=4, pady=(0, 4))
-        ttk.Button(cb, text="Tambah", command=self.add_code).pack(side="left")
-        ttk.Button(cb, text="Hapus", command=self.remove_code).pack(side="left", padx=4)
-        keys_box = ttk.LabelFrame(mid, text="Kunci (gambar kecil = letak bagian itu di LJK)")
-        keys_box.pack(side="right", fill="both", expand=True)
-        self.keys_scroll = ScrollFrame(keys_box)
-        self.keys_scroll.pack(fill="both", expand=True)
+        cb = ttk.Frame(codes_inner, style="Surface.TFrame")
+        cb.pack(fill="x")
+        ttk.Button(cb, text="+ Tambah", command=self.add_code, style="Small.TButton").pack(side="left")
+        ttk.Button(cb, text="Hapus", command=self.remove_code, style="Small.TButton").pack(side="left", padx=(4, 0))
+
+        self.keys_scroll = ScrollFrame(mid, bg=theme.BG)
+        self.keys_scroll.pack(side="right", fill="both", expand=True)
         self.keys_frame = self.keys_scroll.inner
         self.thumbs = []
         self.texts = {}
         self.counters = {}
         self.current_code = ujian.ALL_CODES
 
-        sc = ttk.LabelFrame(self, text="Penilaian")
+        sc_card, sc_inner = theme.card(self, title="Penilaian", pad=(16, 12))
+        sc_card.pack(fill="x")
+        sc = ttk.Frame(sc_inner, style="Surface.TFrame")
         sc.pack(fill="x")
         self.correct = tk.StringVar()
         self.incorrect = tk.StringVar()
         self.unmarked = tk.StringVar()
         self.kkm = tk.StringVar()
         self.scale = tk.BooleanVar()
-        for label, var in (("Benar", self.correct), ("Salah", self.incorrect), ("Kosong", self.unmarked)):
-            ttk.Label(sc, text=label).pack(side="left", padx=(8, 2), pady=6)
+        for idx, (label, var) in enumerate((("Benar", self.correct), ("Salah", self.incorrect), ("Kosong", self.unmarked))):
+            ttk.Label(sc, text=label, style="Surface.TLabel").pack(side="left", padx=(0 if idx == 0 else 12, 4))
             ttk.Entry(sc, textvariable=var, width=6).pack(side="left")
-        ttk.Checkbutton(sc, text="Nilai dalam skala 0-100", variable=self.scale).pack(side="left", padx=16)
-        ttk.Label(sc, text="Nilai batas lulus (opsional):").pack(side="left")
-        ttk.Entry(sc, textvariable=self.kkm, width=6).pack(side="left", padx=4)
+        ttk.Checkbutton(sc, text="Skala nilai 0–100", variable=self.scale, style="Surface.TCheckbutton").pack(
+            side="left", padx=(20, 16)
+        )
+        ttk.Label(sc, text="Batas lulus (opsional):", style="Surface.TLabel").pack(side="left", padx=(0, 6))
+        ttk.Entry(sc, textvariable=self.kkm, width=6).pack(side="left")
 
     def enter(self):
         t = self.wizard.template
@@ -399,34 +405,38 @@ class KeyStep(Step):
         template = self.wizard.template
         for i, (part, labels) in enumerate(template.sections.items()):
             name = f"Bagian {part}" if part else "Jawaban"
-            row = ttk.Frame(self.keys_frame)
-            row.grid(row=i, column=0, sticky="ew", padx=4, pady=(6, 4))
+            outer, row = theme.card(self.keys_frame, pad=(14, 12))
+            outer.grid(row=i, column=0, sticky="ew", padx=(0, 6), pady=(0 if i == 0 else 10, 0))
             thumb = ujian.section_thumbnail(template.path, part)
             if thumb is not None:
-                photo = photo_of(thumb, 240, 110, master=row)
+                photo = photo_of(thumb, 220, 100, master=row)
                 self.thumbs.append(photo)
-                tk.Label(row, image=photo, relief="solid", borderwidth=1).grid(row=0, column=0, rowspan=4, sticky="nw", padx=(0, 8))
-            head = ttk.Frame(row)
-            head.grid(row=0, column=1, sticky="ew")
-            ttk.Label(head, text=f"{name} ({len(labels)} soal)", style="Strong.TLabel").pack(side="left")
+                tk.Label(row, image=photo, bg=theme.SURFACE, highlightthickness=1,
+                         highlightbackground=theme.BORDER).grid(row=0, column=0, rowspan=4, sticky="nw", padx=(0, 14))  # fmt: skip
+            head = ttk.Frame(row, style="Surface.TFrame")
+            head.grid(row=0, column=1, sticky="ew", pady=(0, 6))
+            ttk.Label(head, text=f"{name} ({len(labels)} soal)", style="SurfaceStrong.TLabel").pack(side="left")
             if part and ujian.can_edit(template.path):
-                ttk.Button(head, text="Ganti nama...", command=lambda p=part: self.rename(p)).pack(side="left", padx=8)
+                ttk.Button(head, text="Ganti nama...", style="Small.TButton",
+                           command=lambda p=part: self.rename(p)).pack(side="left", padx=(10, 0))  # fmt: skip
             counter = tk.StringVar()
-            ttk.Label(head, textvariable=counter, foreground=theme.MUTED).pack(side="right")
+            tk.Label(head, textvariable=counter, bg=theme.SURFACE, fg=theme.MUTED,
+                     font="SunValleyCaptionStrongFont").pack(side="right")  # fmt: skip
             text = tk.Text(row, height=2, width=60, wrap="char", font=theme.mono(self, 11))
             text.grid(row=1, column=1, sticky="ew")
             text.bind("<KeyRelease>", lambda e, p=part: self.on_key_edit(p))
             weight = tk.StringVar(value=self.exam.weights.get(part, ""))
             weight.trace_add("write", lambda *a, p=part: self.on_weight_edit(p))
-            wrow = ttk.Frame(row)
-            wrow.grid(row=2, column=1, sticky="ew", pady=(2, 0))
-            ttk.Label(wrow, text="Bobot benar (opsional):").pack(side="left")
-            ttk.Entry(wrow, textvariable=weight, width=30).pack(side="left", padx=4)
-            ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", foreground=theme.MUTED).pack(side="left")
+            wrow = ttk.Frame(row, style="Surface.TFrame")
+            wrow.grid(row=2, column=1, sticky="ew", pady=(8, 0))
+            ttk.Label(wrow, text="Bobot benar (opsional):", style="SurfaceMuted.TLabel").pack(side="left")
+            ttk.Entry(wrow, textvariable=weight, width=26).pack(side="left", padx=6)
+            ttk.Label(wrow, text="mis. 1-10:2, 11-20:1", style="SurfaceMuted.TLabel").pack(side="left")
             in_order = tk.BooleanVar()  # per exam code: set in load_texts
             box = ttk.Checkbutton(row, text="Harus diisi berurutan (jawaban setelah soal kosong tidak dihitung)",
-                                  variable=in_order, command=lambda p=part: self.on_in_order(p))  # fmt: skip
-            box.grid(row=3, column=1, sticky="w", pady=(2, 0))
+                                  variable=in_order, style="Surface.TCheckbutton",
+                                  command=lambda p=part: self.on_in_order(p))  # fmt: skip
+            box.grid(row=3, column=1, sticky="w", pady=(6, 0))
             self.order_boxes[part] = box
             row.columnconfigure(1, weight=1)
             self.texts[part], self.counters[part], self.weights[part] = text, counter, weight
@@ -668,12 +678,13 @@ def spaced(key, group=5):
     return " ".join(key[i : i + group] for i in range(0, len(key), group))
 
 
-def remember_box(parent, wizard, key):
+def remember_box(parent, wizard, key, surface=False):
     """'Remember this folder' checkbox, saved as an app preference (off by default)."""
     var = tk.BooleanVar(value=wizard.prefs[key])
     box = ttk.Checkbutton(parent, text="Ingat folder ini untuk ujian berikutnya", variable=var,
+                          style="Surface.TCheckbutton" if surface else "TCheckbutton",
                           command=lambda: wizard.set_pref(key, var.get()))  # fmt: skip
-    box.pack(anchor="w", padx=6, pady=(0, 4))
+    box.pack(anchor="w", pady=(6, 4))
     box.var = var
     return box
 
@@ -691,7 +702,7 @@ def sensitivity_slider(parent, wizard, bg=None, tip_below=False):
     box = tk.Frame(parent, bg=bg) if bg else ttk.Frame(parent)
     row = tk.Frame(box, bg=bg) if bg else ttk.Frame(box)
     row.pack(fill="x")
-    label(row, text="Kepekaan baca:").pack(side="left")
+    label(row, text="Kepekaan baca:", font="SunValleyCaptionStrongFont").pack(side="left")
     var = tk.IntVar(value=wizard.prefs[ujian.PREF_SENSITIVITY])
     name = tk.StringVar(value=levels[var.get()][0])
 
@@ -704,15 +715,16 @@ def sensitivity_slider(parent, wizard, bg=None, tip_below=False):
             var.set(level)
             wizard.set_pref(ujian.PREF_SENSITIVITY, level)
 
-    box.scale = ttk.Scale(row, from_=0, to=len(levels) - 1, length=160, command=changed)
+    scale_style = "Surface.TScale" if bg == theme.SURFACE else ("Soft.TScale" if bg == theme.SURFACE_ALT else "TScale")
+    box.scale = ttk.Scale(row, from_=0, to=len(levels) - 1, length=150, style=scale_style, command=changed)
     box.scale.set(var.get())
-    box.scale.pack(side="left", padx=6)
-    label(row, textvariable=name, width=11).pack(side="left")
+    box.scale.pack(side="left", padx=8)
+    label(row, textvariable=name, width=11, font="SunValleyCaptionStrongFont", foreground=theme.ACCENT).pack(side="left")
     tip = "Geser ke kanan bila jawaban tipis tidak terbaca (bekas hapusan bisa ikut terbaca)."
     if tip_below:
-        label(box, text=tip, foreground=theme.MUTED).pack(fill="x")
+        label(box, text=tip, foreground=theme.MUTED, font="SunValleyCaptionFont").pack(fill="x", pady=(2, 0))
     else:
-        label(row, text=tip, foreground=theme.MUTED).pack(side="left")
+        label(row, text=tip, foreground=theme.MUTED, font="SunValleyCaptionFont").pack(side="left", padx=(6, 0))
     box.var = var
     box.sync = lambda: box.scale.set(wizard.prefs[ujian.PREF_SENSITIVITY])  # changed elsewhere
     return box
@@ -724,37 +736,42 @@ class ScansStep(Step):
 
     def __init__(self, wizard):
         super().__init__(wizard)
-        f = ttk.LabelFrame(self, text="Folder hasil scan LJK")
-        f.pack(fill="both", expand=True)
-        row = ttk.Frame(f)
-        row.pack(fill="x", padx=6, pady=6)
+        f_card, f = theme.card(self, title="Folder hasil scan LJK", pad=(16, 14))
+        f_card.pack(fill="both", expand=True)
+        row = ttk.Frame(f, style="Surface.TFrame")
+        row.pack(fill="x")
         self.folder = tk.StringVar()
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
-        ttk.Button(row, text="Scan dari scanner...", command=self.scan_paper).pack(side="left")
+        ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="Scan dari scanner...", command=self.scan_paper, style="Accent.TButton").pack(
+            side="left", padx=(6, 0)
+        )
         self.archive_btn = ttk.Button(row, text="Arsipkan scan lama...", command=self.archive)
-        self.archive_btn.pack(side="left", padx=(4, 0))
-        self.remember = remember_box(f, wizard, ujian.PREF_SCANS)
+        self.archive_btn.pack(side="left", padx=(6, 0))
+        self.remember = remember_box(f, wizard, ujian.PREF_SCANS, surface=True)
         self.count = tk.StringVar()
-        ttk.Label(f, textvariable=self.count).pack(anchor="w", padx=6)
-        self.files = tk.Listbox(f, height=8)
-        self.files.pack(fill="both", expand=True, padx=6, pady=6)
+        tk.Label(f, textvariable=self.count, bg=theme.SURFACE, fg=theme.ACCENT,
+                 font="SunValleyCaptionStrongFont", anchor="w").pack(anchor="w", pady=(2, 6))  # fmt: skip
+        self.files = tk.Listbox(f, height=7)
+        self.files.pack(fill="both", expand=True)
         self.folder.trace_add("write", lambda *a: self.scan())
 
-        s = ttk.LabelFrame(self, text="Daftar peserta (opsional): nama & kelompok diambil dari sini, peserta yang tidak ikut ketahuan")
-        s.pack(fill="x", pady=(8, 0))
-        row = ttk.Frame(s)
-        row.pack(fill="x", padx=6, pady=6)
+        s_card, s = theme.card(self, title="Daftar peserta (opsional)",
+                               subtitle="nama & kelompok diambil dari sini, peserta tidak ikut otomatis ditandai",
+                               pad=(16, 14))  # fmt: skip
+        s_card.pack(fill="x", pady=(12, 0))
+        row = ttk.Frame(s, style="Surface.TFrame")
+        row.pack(fill="x")
         self.students = tk.StringVar()
         ttk.Entry(row, textvariable=self.students).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="Pilih Excel/CSV...", command=self.pick_students).pack(side="left", padx=4)
-        ttk.Button(row, text="Tanpa daftar", command=lambda: self.students.set("")).pack(side="left")
-        cols = ttk.Frame(s)
-        cols.pack(fill="x", padx=6, pady=(0, 6))
+        ttk.Button(row, text="Pilih Excel/CSV...", command=self.pick_students).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="Tanpa daftar", command=lambda: self.students.set("")).pack(side="left", padx=(6, 0))
+        cols = ttk.Frame(s, style="Surface.TFrame")
+        cols.pack(fill="x", pady=(10, 0))
         self.col_vars = {}
         self.col_boxes = {}
         for i, (key, label) in enumerate((("nis", "Kolom No. Peserta"), ("nama", "Kolom Nama"), ("kelas", "Kolom Kelompok"))):
-            ttk.Label(cols, text=label).grid(row=0, column=i, sticky="w", padx=(0, 12))
+            ttk.Label(cols, text=label, style="SurfaceMuted.TLabel").grid(row=0, column=i, sticky="w", padx=(0, 12), pady=(0, 2))
             var = tk.StringVar()
             box = ttk.Combobox(cols, textvariable=var, state="readonly", width=15)
             box.grid(row=1, column=i, sticky="ew", padx=(0, 12))
@@ -762,7 +779,8 @@ class ScansStep(Step):
             self.col_vars[key], self.col_boxes[key] = var, box
             box.bind("<<ComboboxSelected>>", lambda e: self.list_check())
         self.student_info = tk.StringVar()
-        ttk.Label(s, textvariable=self.student_info, foreground=theme.MUTED).pack(anchor="w", padx=6, pady=(0, 6))
+        tk.Label(s, textvariable=self.student_info, bg=theme.SURFACE, fg=theme.MUTED,
+                 font="SunValleyCaptionFont", anchor="w").pack(anchor="w", pady=(8, 0))  # fmt: skip
         self.students.trace_add("write", lambda *a: self.read_students())
 
     def enter(self):
@@ -910,24 +928,29 @@ class OutputStep(Step):
 
     def __init__(self, wizard):
         super().__init__(wizard)
-        f = ttk.LabelFrame(self, text="Nama ujian (judul rekap)")
-        f.pack(fill="x")
+        name_card, nf = theme.card(self, title="Nama ujian (judul rekap)", pad=(18, 16))
+        name_card.pack(fill="x")
         self.name = tk.StringVar()
-        ttk.Entry(f, textvariable=self.name).pack(fill="x", padx=6, pady=6)
-        f = ttk.LabelFrame(self, text="Folder hasil")
-        f.pack(fill="x", pady=8)
-        row = ttk.Frame(f)
-        row.pack(fill="x", padx=6, pady=6)
+        ttk.Entry(nf, textvariable=self.name).pack(fill="x")
+
+        out_card, f = theme.card(self, title="Folder hasil", pad=(18, 16))
+        out_card.pack(fill="x", pady=(14, 0))
+        row = ttk.Frame(f, style="Surface.TFrame")
+        row.pack(fill="x")
         self.folder = tk.StringVar()
         ttk.Entry(row, textvariable=self.folder).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=4)
-        self.remember = remember_box(f, wizard, ujian.PREF_OUTPUT)
+        ttk.Button(row, text="Pilih...", command=self.pick).pack(side="left", padx=(8, 0))
+        self.remember = remember_box(f, wizard, ujian.PREF_OUTPUT, surface=True)
         self.existing = tk.StringVar()
-        ttk.Label(f, textvariable=self.existing, foreground=theme.WARN).pack(anchor="w", padx=6)
+        tk.Label(f, textvariable=self.existing, bg=theme.SURFACE, fg=theme.WARN,
+                 font="SunValleyBodyStrongFont", anchor="w").pack(anchor="w", pady=(6, 2))  # fmt: skip
         self.policy = tk.StringVar(value="replace")
-        self.replace_rb = ttk.Radiobutton(f, text="Hapus hasil lama lalu proses ulang", variable=self.policy, value="replace")
-        self.new_rb = ttk.Radiobutton(f, text="Simpan di subfolder baru (tanggal & jam)", variable=self.policy, value="new")
-        self.keep_rb = ttk.Radiobutton(f, text="Pakai hasil yang sudah ada (tanpa proses ulang)", variable=self.policy, value="keep")
+        self.replace_rb = ttk.Radiobutton(f, text="Hapus hasil lama lalu proses ulang", variable=self.policy,
+                                          value="replace", style="Surface.TRadiobutton")  # fmt: skip
+        self.new_rb = ttk.Radiobutton(f, text="Simpan di subfolder baru (tanggal & jam)", variable=self.policy,
+                                      value="new", style="Surface.TRadiobutton")  # fmt: skip
+        self.keep_rb = ttk.Radiobutton(f, text="Pakai hasil yang sudah ada (tanpa proses ulang)", variable=self.policy,
+                                       value="keep", style="Surface.TRadiobutton")  # fmt: skip
         self.folder.trace_add("write", lambda *a: self.check())
 
     def enter(self):
@@ -995,29 +1018,39 @@ class OutputStep(Step):
 
 class ProcessStep(Step):
     title = "Proses & periksa"
-    hint = "Baris merah perlu dicek. Pilih baris untuk melihat LJK-nya; 'Koreksi' untuk membetulkan bacaan."
+    hint = "Baris merah muda perlu dicek. Pilih baris untuk melihat LJK-nya; klik ganda atau 'Koreksi' untuk membetulkan."
 
     def __init__(self, wizard):
         super().__init__(wizard)
-        top = ttk.Frame(self)
-        top.pack(fill="x")
+        ctrl_card = tk.Frame(self, bg=theme.SURFACE, highlightthickness=1, highlightbackground=theme.BORDER)
+        ctrl_card.pack(fill="x")
+        top = tk.Frame(ctrl_card, bg=theme.SURFACE)
+        top.pack(fill="x", padx=16, pady=(12, 10))
         self.run_btn = ttk.Button(top, text="▶  Proses LJK", command=self.start, style="Accent.TButton")
         self.run_btn.pack(side="left")
         self.stop_btn = ttk.Button(top, text="■  Stop", command=self.stop, state="disabled")
-        self.stop_btn.pack(side="left", padx=4)
-        self.progress = ttk.Progressbar(top, length=260)
-        self.progress.pack(side="left", padx=8)
+        self.stop_btn.pack(side="left", padx=(6, 0))
+        self.progress = ttk.Progressbar(top, length=240)
+        self.progress.pack(side="left", padx=(14, 10))
         self.progress_text = tk.StringVar()
-        ttk.Label(top, textvariable=self.progress_text).pack(side="left")
+        tk.Label(top, textvariable=self.progress_text, bg=theme.SURFACE, fg=theme.MUTED,
+                 font="SunValleyCaptionStrongFont").pack(side="left")  # fmt: skip
         ttk.Button(top, text="Log", command=self.show_log).pack(side="right")
-        ttk.Button(top, text="Koreksi...", command=self.correct).pack(side="right", padx=4)
-        self.sensitivity = sensitivity_slider(self, wizard)
-        self.sensitivity.pack(fill="x", pady=(6, 0))
+        ttk.Button(top, text="Koreksi...", command=self.correct).pack(side="right", padx=(0, 6))
+
+        tk.Frame(ctrl_card, bg=theme.BORDER, height=1).pack(fill="x")
+        sens_row = tk.Frame(ctrl_card, bg=theme.SURFACE_ALT)
+        sens_row.pack(fill="x")
+        self.sensitivity = sensitivity_slider(sens_row, wizard, bg=theme.SURFACE_ALT)
+        self.sensitivity.pack(fill="x", padx=16, pady=7)
+
+        self.kpi = theme.StatStrip(self, bg=theme.BG)
 
         split = ttk.Panedwindow(self, orient="horizontal")
-        split.pack(fill="both", expand=True, pady=6)
+        split.pack(fill="both", expand=True, pady=(10, 6))
         self.split = split
-        table = ttk.Frame(split, width=400, height=200)
+        table = tk.Frame(split, width=400, height=200, bg=theme.SURFACE,
+                         highlightthickness=1, highlightbackground=theme.BORDER)  # fmt: skip
         table.grid_propagate(False)
         split.add(table, weight=3)
         self.tree = ttk.Treeview(table, show="headings", selectmode="browse")
@@ -1029,6 +1062,7 @@ class ProcessStep(Step):
         hs.grid(row=1, column=0, sticky="ew")
         table.rowconfigure(0, weight=1)
         table.columnconfigure(0, weight=1)
+        self.tree.tag_configure("odd", background=theme.STRIPE_BG)
         self.tree.tag_configure("flag", background=RED)
         self.tree.tag_configure("fixed", background=BLUE)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.on_select())
@@ -1039,7 +1073,7 @@ class ProcessStep(Step):
         split.bind("<ButtonRelease-1>", lambda e: setattr(self, "user_sash", True))
         self.user_sash = False
         self.summary = tk.StringVar()
-        ttk.Label(self, textvariable=self.summary).pack(anchor="w")
+        ttk.Label(self, textvariable=self.summary, foreground=theme.MUTED).pack(anchor="w")
         self.proc = None
         self.q = None
         self.log = []
@@ -1203,16 +1237,26 @@ class ProcessStep(Step):
             self.tree.column(c, width=w, anchor="w" if c in ("File", "Nama", "Catatan") else "center", stretch=False)
         self.tree.delete(*self.tree.get_children())
         for i, r in enumerate(self.results):
-            tag = "flag" if r.flags else "fixed" if r.corrected else ""
-            self.tree.insert("", "end", iid=str(i), tags=(tag,), values=self.row_values(i, r))
+            tag = "flag" if r.flags else "fixed" if r.corrected else ("odd" if i % 2 else "")
+            self.tree.insert("", "end", iid=str(i), tags=(tag,) if tag else (), values=self.row_values(i, r))
         s = ujian.summary(self.results)
         if self.results:
+            self.kpi.update_stats([
+                ("Total LJK", s["peserta"], theme.FG),
+                ("Perlu dicek", s["perlu_dicek"], theme.DANGER if s["perlu_dicek"] else theme.DONE),
+                ("Rata-rata", s["rata"], theme.ACCENT),
+                ("Tertinggi", s["tertinggi"], theme.DONE),
+                ("Terendah", s["terendah"], theme.FG),
+            ])
+            if not self.kpi.winfo_manager():
+                self.kpi.pack(fill="x", pady=(10, 0), before=self.split)
             self.summary.set(
                 f"{s['peserta']} LJK  •  perlu dicek: {s['perlu_dicek']}  •  rata-rata: {s['rata']}  "
                 f"•  tertinggi: {s['tertinggi']}  •  terendah: {s['terendah']}"
             )
             self.tree.selection_set("0")
         else:
+            self.kpi.pack_forget()
             self.summary.set("Belum ada hasil. Klik 'Proses LJK'.")
             self.preview.show(None, "")
         self.after_idle(self.place_sash)
@@ -1295,35 +1339,44 @@ class CorrectionDialog(tk.Toplevel):
     def __init__(self, master, result, sections, exam, on_done):
         super().__init__(master)
         self.title(f"Koreksi — {result.file_id}")
-        self.geometry(f"900x{min(720, self.winfo_screenheight() - 100)}")
+        self.geometry(f"920x{min(720, self.winfo_screenheight() - 100)}")
         self.result, self.sections, self.exam, self.on_done = result, sections, exam, on_done
-        # Buttons first, at the bottom, so a tall sheet never pushes them off-screen
-        bar = ttk.Frame(self)
-        bar.pack(side="bottom", fill="x", padx=8, pady=8)
+        # Footer first, at the bottom, so a tall sheet never pushes them off-screen
+        foot = tk.Frame(self, bg=theme.SURFACE)
+        foot.pack(side="bottom", fill="x")
+        tk.Frame(foot, bg=theme.BORDER, height=1).pack(fill="x")
+        bar = tk.Frame(foot, bg=theme.SURFACE)
+        bar.pack(fill="x", padx=20, pady=12)
         ttk.Button(bar, text="Simpan koreksi", command=self.save, style="Accent.TButton").pack(side="right")
-        ttk.Button(bar, text="Batal", command=self.destroy).pack(side="right", padx=4)
+        ttk.Button(bar, text="Batal", command=self.destroy).pack(side="right", padx=(0, 8))
         ttk.Button(bar, text="Kembalikan ke hasil scan", command=self.revert).pack(side="left")
-        ttk.Label(self, text="Ubah yang salah baca. '-' = kosong, (AC) = lebih dari satu tanda.",
-                  foreground=theme.MUTED).pack(anchor="w", padx=8, pady=6)  # fmt: skip
-        ident = ttk.LabelFrame(self, text="Identitas")
-        ident.pack(fill="x", padx=8)
+
+        body = ttk.Frame(self, padding=(20, 14, 20, 14))
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="Ubah yang salah baca. '-' = kosong, (AC) = lebih dari satu tanda.",
+                  foreground=theme.MUTED).pack(anchor="w", pady=(0, 10))  # fmt: skip
+        ident_card, ident = theme.card(body, title="Identitas", pad=(14, 12))
+        ident_card.pack(fill="x")
+        grid = ttk.Frame(ident, style="Surface.TFrame")
+        grid.pack(fill="x")
         self.fields = {}
         for i, (k, v) in enumerate(result.info.items()):
-            ttk.Label(ident, text=k).grid(row=i // 3, column=(i % 3) * 2, sticky="w", padx=4, pady=3)
+            ttk.Label(grid, text=k, style="SurfaceMuted.TLabel").grid(row=i // 3, column=(i % 3) * 2, sticky="w", padx=(0, 6), pady=4)
             var = tk.StringVar(value=v)
-            ttk.Entry(ident, textvariable=var, width=24).grid(row=i // 3, column=(i % 3) * 2 + 1, padx=4)
+            ttk.Entry(grid, textvariable=var, width=22).grid(row=i // 3, column=(i % 3) * 2 + 1, sticky="ew", padx=(0, 14), pady=4)
             self.fields[k] = var
-        box = ttk.LabelFrame(self, text="Jawaban")
-        box.pack(fill="both", expand=True, padx=8, pady=6)
-        scroll = ScrollFrame(box)
+        box_card, box = theme.card(body, title="Jawaban", pad=(14, 12))
+        box_card.pack(fill="both", expand=True, pady=(12, 0))
+        scroll = ScrollFrame(box, bg=theme.SURFACE)
         scroll.pack(fill="both", expand=True)
         ans = scroll.inner
         self.texts = {}
         for part, labels in sections.items():
-            ttk.Label(ans, text=f"Bagian {part} ({len(labels)} soal)" if part else f"Jawaban ({len(labels)} soal)").pack(anchor="w", padx=4)
+            ttk.Label(ans, text=f"Bagian {part} ({len(labels)} soal)" if part else f"Jawaban ({len(labels)} soal)",
+                      style="SurfaceStrong.TLabel").pack(anchor="w", pady=(4, 4))  # fmt: skip
             t = tk.Text(ans, height=3, wrap="word", font=theme.mono(self, 10))
             t.insert("1.0", answers_text(result.answers, labels))
-            t.pack(fill="x", padx=4, pady=(0, 6))
+            t.pack(fill="x", pady=(0, 8))
             self.texts[part] = t
         self.transient(master)
 
@@ -1367,48 +1420,65 @@ class ExportStep(Step):
     def __init__(self, wizard):
         super().__init__(wizard)
         self.stats = tk.StringVar()
-        ttk.Label(self, textvariable=self.stats, style="Big.TLabel").pack(anchor="w", pady=(0, 6))
-        self.absent_row = ttk.Frame(self)
+        self.kpi = theme.StatStrip(self, bg=theme.BG)
+        self.kpi.pack(fill="x", pady=(0, 10))
+
+        self.absent_row = tk.Frame(self, bg=theme.WARN_SOFT, highlightthickness=1, highlightbackground="#fde68a")
         self.absent_info = tk.StringVar()
-        ttk.Label(self.absent_row, textvariable=self.absent_info).pack(side="left")
-        ttk.Button(self.absent_row, text="Lihat daftarnya...", command=self.show_absent).pack(side="left", padx=8)
-        f = ttk.LabelFrame(self, text="Analisis butir soal")
-        f.pack(fill="both", expand=True)
+        tk.Label(self.absent_row, textvariable=self.absent_info, bg=theme.WARN_SOFT, fg=theme.WARN,
+                 font="SunValleyBodyStrongFont").pack(side="left", padx=14, pady=8)  # fmt: skip
+        ttk.Button(self.absent_row, text="Lihat daftarnya...", style="Small.TButton",
+                   command=self.show_absent).pack(side="right", padx=12, pady=6)  # fmt: skip
+
+        exp_card, exp = theme.card(self, pad=(16, 12))
+        exp_card.pack(side="bottom", fill="x", pady=(12, 0))
+        bar = ttk.Frame(exp, style="Surface.TFrame")
+        bar.pack(fill="x")
+        ttk.Button(bar, text="Ekspor ke Excel...", command=self.export, style="Accent.TButton").pack(side="left")
+        ttk.Button(bar, text="Ekspor CSV...", command=self.export_csv).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Ekspor lanjutan...", command=self.export_advanced).pack(side="left", padx=(6, 0))
+        ttk.Button(bar, text="Laporan per peserta (PDF)...", command=self.export_reports).pack(side="left", padx=(6, 0))
+        self.export_info = tk.StringVar()
+        self.export_label = tk.Label(bar, textvariable=self.export_info, bg=theme.SURFACE, fg=theme.MUTED,
+                                     font="SunValleyCaptionStrongFont")  # fmt: skip
+        self.export_label.pack(side="right")
+
+        order = ttk.Frame(exp, style="Surface.TFrame")
+        order.pack(fill="x", pady=(10, 0))
+        ttk.Label(order, text="Urutan rekap & laporan:", style="SurfaceMuted.TLabel").pack(side="left")
+        self.order = tk.StringVar()
+        self.order_box = ttk.Combobox(order, textvariable=self.order, state="readonly", width=24,
+                                      values=list(ujian.RANK_ORDERS.values()))  # fmt: skip
+        self.order_box.pack(side="left", padx=8)
+        ttk.Button(order, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
+        ttk.Button(order, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(
+            side="right", padx=(0, 6)
+        )
+        self.order_box.bind("<<ComboboxSelected>>", lambda e: self.on_order())
+
+        self.analysis_card, f = theme.card(self, title="Analisis butir soal", pad=(14, 12))
+        self.analysis_card.pack(fill="both", expand=True)
         self.item_note = tk.StringVar()  # shown only when some question needs a look
-        self.item_label = ttk.Label(f, textvariable=self.item_note, foreground=theme.WARN)
+        self.item_label = tk.Label(f, textvariable=self.item_note, bg=theme.WARN_SOFT, fg=theme.WARN,
+                                   font="SunValleyCaptionStrongFont", anchor="w", padx=10, pady=5)  # fmt: skip
+        table_wrap = ttk.Frame(f, style="Surface.TFrame")
+        table_wrap.pack(fill="both", expand=True)
         cols = ("kode", "soal", "kunci", "bobot", "benar", "kategori", "daya_beda", "terbanyak",
                 "A", "B", "C", "D", "E", "Kosong", "Ganda")  # fmt: skip
         names = {"kode": "Kode", "benar": "% Benar", "daya_beda": "Daya beda"}
-        self.tree = ttk.Treeview(f, columns=cols, show="headings")
+        self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", height=8)
         for c in cols:
             self.tree.heading(c, text=names.get(c, c.capitalize() if len(c) > 1 else c))
             self.tree.column(c, width=80 if c in ("soal", "kunci", "kategori", "daya_beda", "terbanyak") else 55,
                              anchor="center")  # fmt: skip
-        self.tree.tag_configure("check", background="#FFE699")
+        self.tree.tag_configure("odd", background=theme.STRIPE_BG)
+        self.tree.tag_configure("check", background=theme.WARN_SOFT)
         self.tree.bind("<<TreeviewSelect>>", lambda e: self.show_item_note())
-        vs = ttk.Scrollbar(f, orient="vertical", command=self.tree.yview)
+        vs = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vs.set)
         self.tree.pack(side="left", fill="both", expand=True)
         vs.pack(side="left", fill="y")
-        bar = ttk.Frame(self)
-        bar.pack(fill="x", pady=8)
-        ttk.Button(bar, text="Ekspor ke Excel...", command=self.export, style="Accent.TButton").pack(side="left")
-        ttk.Button(bar, text="Ekspor CSV...", command=self.export_csv).pack(side="left", padx=(6, 0))
-        ttk.Button(bar, text="Ekspor lanjutan...", command=self.export_advanced).pack(side="left", padx=(6, 0))
-        ttk.Button(bar, text="Laporan per peserta (PDF)...", command=self.export_reports).pack(side="left", padx=6)
-        order = ttk.Frame(self)  # second row: the export buttons fill the first one on a small window
-        order.pack(fill="x")
-        ttk.Label(order, text="Urutan rekap & laporan:").pack(side="left")
-        self.order = tk.StringVar()
-        self.order_box = ttk.Combobox(order, textvariable=self.order, state="readonly", width=24,
-                                      values=list(ujian.RANK_ORDERS.values()))  # fmt: skip
-        self.order_box.pack(side="left", padx=6)
-        ttk.Button(order, text="Ujian baru (template sama)", command=self.new_exam).pack(side="right")
-        ttk.Button(order, text="Buka folder hasil", command=lambda: open_path(self.exam.output_dir)).pack(side="right", padx=6)
-        self.export_info = tk.StringVar()
-        self.export_label = ttk.Label(self, textvariable=self.export_info, foreground=theme.MUTED)
-        self.export_label.pack(anchor="w", pady=(6, 0))
-        self.order_box.bind("<<ComboboxSelected>>", lambda e: self.on_order())
+        self.table_wrap = table_wrap
 
     def show_export_status(self):
         if not self.wizard.export_pending():
@@ -1472,19 +1542,33 @@ class ExportStep(Step):
             missing = f"   •   tidak ikut: {len(self.absent)}"
         if self.absent:
             self.absent_info.set(f"{len(self.absent)} peserta di daftar tidak ada LJK-nya.")
-            self.absent_row.pack(fill="x", pady=(0, 6), before=self.tree.master)
+            self.absent_row.pack(fill="x", pady=(0, 10), before=self.analysis_card)
         else:
             self.absent_row.pack_forget()
         kkm = f"   •   lulus (batas {self.exam.kkm:g}): {s['tuntas']}" if self.exam.kkm else ""
         self.stats.set(f"{s['peserta']} LJK   •   rata-rata {s['rata']}   •   tertinggi {s['tertinggi']}   "
                        f"•   terendah {s['terendah']}{kkm}{missing}   •   perlu dicek: {s['perlu_dicek']}")  # fmt: skip
+        tiles = [
+            ("Jumlah LJK", s["peserta"], theme.FG),
+            ("Rata-rata", s["rata"], theme.ACCENT),
+            ("Tertinggi", s["tertinggi"], theme.DONE),
+            ("Terendah", s["terendah"], theme.FG),
+        ]
+        if self.exam.kkm:
+            tiles.append((f"Lulus (≥{self.exam.kkm:g})", s["tuntas"], theme.DONE))
+        if self.wizard.students:
+            tiles.append(("Tidak ikut", len(self.absent), theme.WARN if self.absent else theme.FG))
+        tiles.append(("Perlu dicek", s["perlu_dicek"], theme.DANGER if s["perlu_dicek"] else theme.DONE))
+        self.kpi.update_stats(tiles)
+
         self.tree.delete(*self.tree.get_children())
         self.analysis = ujian.item_analysis(results, self.exam, self.wizard.template.sections)
         by_code = any(a["kode"] for a in self.analysis)
         self.tree["displaycolumns"] = [c for c in self.tree["columns"] if by_code or c != "kode"]
         for i, a in enumerate(self.analysis):
             power = "" if a["daya_beda"] is None else f"{a['daya_beda']:g}"
-            self.tree.insert("", "end", iid=str(i), tags=("check",) if a["catatan"] else (),
+            tag = "check" if a["catatan"] else ("odd" if i % 2 else "")
+            self.tree.insert("", "end", iid=str(i), tags=(tag,) if tag else (),
                              values=(a["kode"], a["soal"], a["kunci"], f"{a['bobot']:g}", a["benar"], a["kategori"],
                                      power, a["terbanyak"], *[a[o] for o in ujian.OPTIONS_ORDER],
                                      a["Kosong"], a["Ganda"]))  # fmt: skip
@@ -1492,7 +1576,7 @@ class ExportStep(Step):
         self.item_legend = f"Kuning: {flagged} soal perlu dicek. Pilih barisnya untuk melihat alasannya."
         self.item_note.set(self.item_legend)
         if flagged:
-            self.item_label.pack(side="bottom", anchor="w", padx=6, pady=(2, 4), before=self.tree)
+            self.item_label.pack(side="bottom", fill="x", pady=(8, 0), before=self.table_wrap)
         else:
             self.item_label.pack_forget()
         self.show_export_status()
@@ -1951,12 +2035,14 @@ class Wizard(tk.Tk):
         self.switch = False  # closed to reopen in the other look (run_wizard)
 
     def build(self):
-        # sidebar: app name and the steps
-        side = ttk.Frame(self, style="Side.TFrame", width=250)
+        # sidebar: app brand, step list, and utility actions
+        side = ttk.Frame(self, style="Side.TFrame", width=262)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
+        tk.Frame(self, bg=theme.BORDER, width=1).pack(side="left", fill="y")
+
         brand = tk.Frame(side, bg=theme.SIDEBAR)
-        brand.pack(anchor="w", padx=20, pady=(22, 20))
+        brand.pack(fill="x", padx=20, pady=(22, 16))
         self.logo = theme.logo(self)
         if self.logo:
             tk.Label(brand, image=self.logo, bg=theme.SIDEBAR).pack(side="left", padx=(0, 10))
@@ -1965,32 +2051,42 @@ class Wizard(tk.Tk):
         tk.Label(names, text="Pemindai LJK", bg=theme.SIDEBAR, fg=theme.FG, font="SunValleySubtitleFont").pack(anchor="w")
         tk.Label(names, text=f"OMRChecker v{VERSION}", bg=theme.SIDEBAR, fg=theme.MUTED, font="SunValleyCaptionFont").pack(
             anchor="w")  # fmt: skip
-        self.stepper = theme.Stepper(side, STEPS, self.jump, width=250)
+        tk.Frame(side, bg=theme.BORDER, height=1).pack(fill="x", padx=20, pady=(0, 10))
+
+        self.stepper = theme.Stepper(side, STEPS, self.jump, width=262)
         self.stepper.pack(fill="x")
-        # the old main window stays reachable with OMRChecker.exe --lanjutan
-        self.help_btn = ttk.Button(side, text="Bantuan", command=self.show_help_menu)
-        self.help_btn.pack(side="bottom", anchor="w", padx=20, pady=(4, 20))
-        ttk.Button(side, text="Buka ujian lama...", command=self.open_exam).pack(side="bottom", anchor="w", padx=20, pady=4)
+
+        # bottom utility actions (the old main window stays reachable with --lanjutan)
+        util = tk.Frame(side, bg=theme.SIDEBAR)
+        util.pack(side="bottom", fill="x", padx=18, pady=(0, 18))
+        tk.Frame(util, bg=theme.BORDER, height=1).pack(fill="x", pady=(0, 12))
+        ttk.Button(util, text="Buka ujian lama...", command=self.open_exam).pack(fill="x", pady=(0, 6))
+        ttk.Button(util, text="Tampilan ringkas", command=self.switch_look).pack(fill="x", pady=(0, 6))
+        self.help_btn = ttk.Button(util, text="Bantuan", command=self.show_help_menu)
+        self.help_btn.pack(fill="x")
 
         main = ttk.Frame(self)
         main.pack(side="left", fill="both", expand=True)
+        header = ttk.Frame(main)
+        header.pack(fill="x", padx=28, pady=(22, 0))
         self.eyebrow = tk.StringVar()
         self.heading = tk.StringVar()
         self.hint = tk.StringVar()
-        ttk.Label(main, textvariable=self.eyebrow, style="Eyebrow.TLabel", foreground=theme.ACCENT).pack(anchor="w", padx=28, pady=(22, 0))
-        ttk.Label(main, textvariable=self.heading, style="Title.TLabel").pack(anchor="w", padx=28)
-        ttk.Label(main, textvariable=self.hint, foreground=theme.MUTED).pack(anchor="w", padx=28, pady=(2, 0))
+        tk.Label(header, textvariable=self.eyebrow, bg=theme.ACCENT_SOFT, fg=theme.ACCENT,
+                 font="SunValleyCaptionStrongFont", padx=9, pady=2).pack(anchor="w")  # fmt: skip
+        ttk.Label(header, textvariable=self.heading, style="Title.TLabel").pack(anchor="w", pady=(6, 0))
+        ttk.Label(header, textvariable=self.hint, foreground=theme.MUTED).pack(anchor="w", pady=(2, 0))
 
         foot = ttk.Frame(main, style="Footer.TFrame")
         foot.pack(side="bottom", fill="x")
-        ttk.Separator(foot).pack(fill="x")
+        tk.Frame(foot, bg=theme.BORDER, height=1).pack(fill="x")
         self.back_btn = ttk.Button(foot, text="←  Kembali", command=self.back)
         self.back_btn.pack(side="left", padx=28, pady=12)
         self.next_btn = ttk.Button(foot, text="Lanjut  →", command=self.next, style="Accent.TButton")
         self.next_btn.pack(side="right", padx=28, pady=12)
 
         self.body = ttk.Frame(main)
-        self.body.pack(fill="both", expand=True, padx=28, pady=(14, 14))
+        self.body.pack(fill="both", expand=True, padx=28, pady=(16, 16))
 
         self.steps = [cls(self) for cls in (TemplateStep, KeyStep, ScansStep, OutputStep, ProcessStep, ExportStep)]
         self.current = None

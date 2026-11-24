@@ -35,71 +35,81 @@ class ScanDialog(tk.Toplevel):
         self.cancel = threading.Event()
         self.worker = None
 
-        f = ttk.Frame(self, padding=12)
-        f.pack(fill="both", expand=True)
-        f.columnconfigure(0, pad=12)
+        # footer bar
+        foot = tk.Frame(self, bg=theme.SURFACE)
+        foot.pack(side="bottom", fill="x")
+        tk.Frame(foot, bg=theme.BORDER, height=1).pack(fill="x")
+        bar = tk.Frame(foot, bg=theme.SURFACE)
+        bar.pack(fill="x", padx=20, pady=12)
+        self.close_btn = ttk.Button(bar, text="Tutup", command=self.close)
+        self.close_btn.pack(side="right")
+        self.stop_btn = ttk.Button(bar, text="Berhenti", command=self.stop, state="disabled")
+        self.stop_btn.pack(side="right", padx=(0, 6))
+        self.start_btn = ttk.Button(bar, text="Mulai scan", command=self.start, style="Accent.TButton")
+        self.start_btn.pack(side="right", padx=(0, 6))
+
+        body = ttk.Frame(self, padding=(20, 16, 20, 14))
+        body.pack(fill="both", expand=True)
+
+        card, f = theme.card(body, pad=(18, 16))
+        card.pack(fill="x")
+        f.columnconfigure(0, pad=14)
         f.columnconfigure(1, weight=1)
 
-        ttk.Label(f, text="Scanner").grid(row=0, column=0, sticky="w", pady=3)
+        ttk.Label(f, text="Scanner", style="SurfaceStrong.TLabel").grid(row=0, column=0, sticky="w", pady=4)
         self.device = tk.StringVar()
-        self.device_box = ttk.Combobox(f, textvariable=self.device, state="readonly", width=48)
-        self.device_box.grid(row=0, column=1, sticky="we", pady=3)
+        self.device_box = ttk.Combobox(f, textvariable=self.device, state="readonly", width=44)
+        self.device_box.grid(row=0, column=1, sticky="we", pady=4)
         self.device_box.bind("<<ComboboxSelected>>", lambda e: self.on_device())
         self.refresh_btn = ttk.Button(f, text="Cari ulang", command=self.find)
-        self.refresh_btn.grid(row=0, column=2, padx=(6, 0))
+        self.refresh_btn.grid(row=0, column=2, padx=(8, 0))
         self.device_info = tk.StringVar()
-        ttk.Label(f, textvariable=self.device_info, foreground=theme.MUTED, wraplength=520, justify="left").grid(
-            row=1, column=1, columnspan=2, sticky="w")  # fmt: skip
+        tk.Label(f, textvariable=self.device_info, bg=theme.SURFACE, fg=theme.MUTED,
+                 font="SunValleyCaptionFont", wraplength=500, justify="left").grid(
+            row=1, column=1, columnspan=2, sticky="w", pady=(0, 4))  # fmt: skip
 
-        ttk.Label(f, text="Sumber").grid(row=2, column=0, sticky="nw", pady=(8, 3))
-        src = ttk.Frame(f)
-        src.grid(row=2, column=1, columnspan=2, sticky="w", pady=(8, 3))
+        ttk.Label(f, text="Sumber", style="SurfaceStrong.TLabel").grid(row=2, column=0, sticky="nw", pady=(8, 4))
+        src = ttk.Frame(f, style="Surface.TFrame")
+        src.grid(row=2, column=1, columnspan=2, sticky="w", pady=(8, 4))
         self.feeder = tk.BooleanVar(value=self.opts.feeder)
         ttk.Radiobutton(src, text="ADF / pengumpan kertas (semua lembar sekaligus)", variable=self.feeder,
-                        value=True, command=self.on_source).pack(anchor="w")  # fmt: skip
+                        value=True, style="Surface.TRadiobutton", command=self.on_source).pack(anchor="w")  # fmt: skip
         ttk.Radiobutton(src, text="Kaca (flatbed), satu lembar", variable=self.feeder, value=False,
-                        command=self.on_source).pack(anchor="w")  # fmt: skip
+                        style="Surface.TRadiobutton", command=self.on_source).pack(anchor="w", pady=(2, 0))  # fmt: skip
         self.duplex = tk.BooleanVar(value=self.opts.duplex)
-        self.duplex_cb = ttk.Checkbutton(src, text="Dua sisi (hanya bila LJK dicetak bolak-balik)", variable=self.duplex)
-        self.duplex_cb.pack(anchor="w", padx=(20, 0))
+        self.duplex_cb = ttk.Checkbutton(src, text="Dua sisi (hanya bila LJK dicetak bolak-balik)",
+                                         variable=self.duplex, style="Surface.TCheckbutton")  # fmt: skip
+        self.duplex_cb.pack(anchor="w", padx=(22, 0), pady=(2, 0))
 
-        ttk.Label(f, text="Resolusi").grid(row=3, column=0, sticky="w", pady=3)
-        row = ttk.Frame(f)
-        row.grid(row=3, column=1, columnspan=2, sticky="w", pady=3)
+        ttk.Label(f, text="Resolusi", style="SurfaceStrong.TLabel").grid(row=3, column=0, sticky="w", pady=4)
+        row = ttk.Frame(f, style="Surface.TFrame")
+        row.grid(row=3, column=1, columnspan=2, sticky="w", pady=4)
         self.dpi = tk.StringVar(value=str(self.opts.dpi))
         ttk.Combobox(row, textvariable=self.dpi, values=["200", "300"], state="readonly", width=6).pack(side="left")
-        ttk.Label(row, text="dpi").pack(side="left", padx=(4, 20))
+        ttk.Label(row, text="dpi", style="SurfaceMuted.TLabel").pack(side="left", padx=(6, 20))
         self.color = tk.BooleanVar(value=self.opts.color)
-        ttk.Radiobutton(row, text="Abu-abu", variable=self.color, value=False).pack(side="left")
-        ttk.Radiobutton(row, text="Berwarna", variable=self.color, value=True).pack(side="left", padx=(8, 0))
+        ttk.Radiobutton(row, text="Abu-abu", variable=self.color, value=False, style="Surface.TRadiobutton").pack(side="left")
+        ttk.Radiobutton(row, text="Berwarna", variable=self.color, value=True, style="Surface.TRadiobutton").pack(side="left", padx=(10, 0))
 
-        ttk.Label(f, text="Ukuran kertas").grid(row=4, column=0, sticky="w", pady=3)
+        ttk.Label(f, text="Ukuran kertas", style="SurfaceStrong.TLabel").grid(row=4, column=0, sticky="w", pady=4)
         self.paper = tk.StringVar(value=dict(PAPERS).get(self.opts.paper, PAPERS[0][1]))
         ttk.Combobox(f, textvariable=self.paper, values=[label for _, label in PAPERS], state="readonly",
-                     width=16).grid(row=4, column=1, sticky="w", pady=3)  # fmt: skip
+                     width=18).grid(row=4, column=1, sticky="w", pady=4)  # fmt: skip
 
         self.show_ui = tk.BooleanVar(value=self.opts.show_ui)
-        self.show_ui_cb = ttk.Checkbutton(f, variable=self.show_ui,
+        self.show_ui_cb = ttk.Checkbutton(f, variable=self.show_ui, style="Surface.TCheckbutton",
                                           text="Tampilkan jendela driver scanner (pakai bila scan langsung gagal)")  # fmt: skip
-        self.show_ui_cb.grid(row=5, column=1, columnspan=2, sticky="w", pady=(6, 3))
+        self.show_ui_cb.grid(row=5, column=1, columnspan=2, sticky="w", pady=(8, 4))
 
-        ttk.Label(f, text="Simpan ke").grid(row=6, column=0, sticky="nw", pady=(8, 3))
-        ttk.Label(f, text=f"{folder}\n(nama file scan_0001.jpg, scan_0002.jpg, ...; file lama tidak ditimpa)",
-                  foreground=theme.MUTED, wraplength=520, justify="left").grid(row=6, column=1, columnspan=2, sticky="w",
-                                                                          pady=(8, 3))  # fmt: skip
+        ttk.Label(f, text="Simpan ke", style="SurfaceStrong.TLabel").grid(row=6, column=0, sticky="nw", pady=(8, 4))
+        tk.Label(f, text=f"{folder}\n(nama file scan_0001.jpg, scan_0002.jpg, ...; file lama tidak ditimpa)",
+                 bg=theme.SURFACE, fg=theme.MUTED, font="SunValleyCaptionFont", wraplength=500, justify="left").grid(
+            row=6, column=1, columnspan=2, sticky="w", pady=(8, 4))  # fmt: skip
 
-        ttk.Separator(f).grid(row=7, column=0, columnspan=3, sticky="we", pady=10)
         self.status = tk.StringVar()
-        ttk.Label(f, textvariable=self.status, wraplength=560, justify="left").grid(row=8, column=0, columnspan=3,
-                                                                                   sticky="w")  # fmt: skip
-        bar = ttk.Frame(f)
-        bar.grid(row=9, column=0, columnspan=3, sticky="e", pady=(10, 0))
-        self.start_btn = ttk.Button(bar, text="Mulai scan", command=self.start, style="Accent.TButton")
-        self.start_btn.pack(side="left")
-        self.stop_btn = ttk.Button(bar, text="Berhenti", command=self.stop, state="disabled")
-        self.stop_btn.pack(side="left", padx=6)
-        self.close_btn = ttk.Button(bar, text="Tutup", command=self.close)
-        self.close_btn.pack(side="left")
+        ttk.Label(body, textvariable=self.status, foreground=theme.MUTED, wraplength=580, justify="left").pack(
+            anchor="w", pady=(10, 0)
+        )
 
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.on_source()
